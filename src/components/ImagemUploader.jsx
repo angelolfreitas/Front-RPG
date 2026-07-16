@@ -63,7 +63,7 @@ export default function ImagemUploader({
       formData.append("file", file);
       formData.append("tipo", tipo === "personagem" ? "personagens" : "monstros");
 
-      const uploadResponse = await fetch("http://localhost:8080/uploads/imagem", {
+      const uploadResponse = await fetch(`${API_URL}/uploads/imagem`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
@@ -80,7 +80,7 @@ export default function ImagemUploader({
       const endpoint = tipo === "personagem" ? "personagem" : "monstro";
 
       const patchResponse = await fetch(
-        `http://localhost:8080/${endpoint}/${entidadeId}`,
+        `${API_URL}/${endpoint}/${entidadeId}`,
         {
           method: "PATCH",
           headers: {

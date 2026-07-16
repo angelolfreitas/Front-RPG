@@ -27,7 +27,7 @@ export default function ChatSessao({ idCaso }) {
     const fetchHistorico = async () => {
       try {
         // Lembre-se de ajustar a URL base se usar o seu arquivo api.js
-        const response = await fetch(`http://localhost:8080/chat/caso/${idCaso}`, {
+        const response = await fetch(`${API_URL}/chat/caso/${idCaso}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (response.ok) {
@@ -43,7 +43,7 @@ export default function ChatSessao({ idCaso }) {
 
     // 2. Conecta no WebSocket
     const client = new Client({
-      webSocketFactory: () => new SockJS("http://localhost:8080/ws"),
+      webSocketFactory: () => new SockJS(`${API_URL}/ws`),
       connectHeaders: { Authorization: `Bearer ${token}` },
       reconnectDelay: 5000,
       onConnect: () => {
