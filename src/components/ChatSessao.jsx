@@ -5,6 +5,7 @@ import { Send, Users, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function ChatSessao({ idCaso }) {
+  const API_URL = import.meta.env.VITE_API_URL;
   const [mensagens, setMensagens] = useState([]);
   const [novaMensagem, setNovaMensagem] = useState("");
   const [jogadoresOnline, setJogadoresOnline] = useState([]);

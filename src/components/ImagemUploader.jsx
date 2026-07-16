@@ -20,6 +20,7 @@ export default function ImagemUploader({
   onSucesso,
   tamanho = "md",
 }) {
+  const API_URL = import.meta.env.VITE_API_URL;
   const [preview, setPreview] = useState(imagemAtual || null);
   const [status, setStatus] = useState("idle"); // idle | subindo | salvando | sucesso | erro
   const [erro, setErro] = useState(null);
