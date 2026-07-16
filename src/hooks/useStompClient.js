@@ -12,6 +12,7 @@ import SockJS from "sockjs-client";
  * não há conexão ativa (ainda conectando, sem idCaso, ou desconectado).
  */
 export function useStompClient(idCaso) {
+  const API_URL = import.meta.env.VITE_API_URL;
   const clientRef = useRef(null);
   const [isConnected, setIsConnected] = useState(false);
 
@@ -21,7 +22,7 @@ export function useStompClient(idCaso) {
     const token = localStorage.getItem("token");
 
     const client = new Client({
-      webSocketFactory: () => new SockJS("http://localhost:8080/ws"),
+      webSocketFactory: () => new SockJS(`${API_URL}/ws`),
       connectHeaders: { Authorization: `Bearer ${token}` },
       reconnectDelay: 5000,
       onConnect: () => setIsConnected(true),
