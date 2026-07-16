@@ -103,13 +103,17 @@ const Inventario = () => {
   }
 };
 const handleChangeQuantity = async (entry, delta) => {
+  
+  if (delta < 0 && entry.quantidade + delta <= 0) {
+    return handleRemove(entry);
+  }
+
   try {
     const response = await api.patch(
       `/inventario/${entry.id.idPersonagem}/${entry.id.idItem}?delta=${delta}`
     );
 
     if (response.status === 204) {
-      // quantidade chegou a 0, item saiu do inventário
       setInventario((prev) => prev.filter((i) => i !== entry));
     } else {
       setInventario((prev) =>
@@ -117,10 +121,10 @@ const handleChangeQuantity = async (entry, delta) => {
       );
     }
 
-    fetchAll(); // sincroniza o catálogo (estoque mudou)
+    fetchAll();
   } catch (error) {
     if (error.response?.status === 409) {
-      alert(error.response.data.message); // "Estoque insuficiente..."
+      alert(error.response.data.message);
     } else {
       console.error("Erro ao alterar quantidade:", error);
     }

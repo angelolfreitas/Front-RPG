@@ -22,9 +22,7 @@ api.interceptors.response.use(
   (error) => {
     const status = error.response?.status;
 
-    // 401: token ausente/expirado. 403: aqui tratado como sessão inválida
-    // (ex: conta excluída) — ver observação sobre esse trade-off.
-    if (status === 401 || status === 403) {
+    if (status === 401) {
       const jaEstaNaTelaDeErro = window.location.pathname === "/sessao-invalida";
       const estaFazendoLoginOuRegistro = ["/login", "/register"].includes(window.location.pathname);
 
@@ -36,6 +34,8 @@ api.interceptors.response.use(
         window.location.href = "/sessao-invalida";
       }
     }
+    // 403 agora não desloga mais — deixa o componente que fez a chamada
+    // decidir como avisar o usuário (ex: alert de "sem permissão").
 
     return Promise.reject(error);
   }

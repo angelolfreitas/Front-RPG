@@ -90,7 +90,7 @@ const enviarMensagem = (e) => {
 };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 h-[600px] w-full">
+    <div className="flex flex-col lg:flex-row gap-6 h-[75vh] max-h-[600px] w-full">
       {/* ÁREA DO CHAT */}
       <div className="flex-1 flex flex-col bg-[#EAE0C4] border-4 border-[#0B0A0D] rounded-sm shadow-[6px_6px_0px_0px_#3F8574] overflow-hidden">
         <div className="bg-[#201A1E] px-4 py-3 flex items-center gap-2 border-b-2 border-[#0B0A0D]">
