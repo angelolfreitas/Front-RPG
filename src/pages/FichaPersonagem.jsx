@@ -15,6 +15,7 @@ import { useStompClient } from "@/hooks/useStompClient";
 import ImagemUploader, { RetratoElegante } from "@/components/ImagemUploader";
 import { hasAuthority } from "@/utils/auth";
 import { ShieldPlus } from "lucide-react";
+import { resetIOSZoom } from "@/utils/resetZoom";
 
 
 const FontImports = () => (
@@ -88,6 +89,10 @@ const FichaPersonagem = () => {
   const stompClient = useStompClient(idCasoAtivo);
   const [isDeletando, setIsDeletando] = useState(false);
   const [menuAberto, setMenuAberto] = useState(false);
+
+  useEffect(() => {
+  resetIOSZoom();
+  }, []);
 
 
 const handleDeletarPersonagem = async () => {
