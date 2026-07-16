@@ -92,7 +92,7 @@ const enviarMensagem = (e) => {
   return (
     <div className="flex flex-col lg:flex-row gap-6 h-[75vh] max-h-[600px] w-full">
       {/* ÁREA DO CHAT */}
-      <div className="flex-1 flex flex-col bg-[#EAE0C4] border-4 border-[#0B0A0D] rounded-sm shadow-[6px_6px_0px_0px_#3F8574] overflow-hidden">
+      <div className="order-1 lg:order-none flex-1 flex flex-col bg-[#EAE0C4] border-4 border-[#0B0A0D] rounded-sm shadow-[6px_6px_0px_0px_#3F8574] overflow-hidden">
         <div className="bg-[#201A1E] px-4 py-3 flex items-center gap-2 border-b-2 border-[#0B0A0D]">
           <ShieldAlert className="w-5 h-5 text-[#3F8574]" />
           <h3 className="font-display font-bold text-lg text-[#EAE0C4] leading-none mt-1">REGISTRO DE COMUNICAÇÃO</h3>
@@ -130,7 +130,7 @@ const enviarMensagem = (e) => {
       </div>
 
       {/* ÁREA DE JOGADORES ONLINE */}
-      <div className="w-full lg:w-64 flex flex-col bg-[#EAE0C4] border-4 border-[#0B0A0D] rounded-sm shadow-[6px_6px_0px_0px_#B99A4B] h-full overflow-hidden">
+      <div className="order-2 lg:order-none w-full lg:w-64 flex flex-col bg-[#EAE0C4] border-4 border-[#0B0A0D] rounded-sm shadow-[6px_6px_0px_0px_#B99A4B] lg:h-full overflow-hidden">
         <div className="bg-[#201A1E] px-4 py-3 flex items-center justify-between border-b-2 border-[#0B0A0D]">
           <h3 className="font-display font-bold text-lg text-[#EAE0C4] leading-none mt-1">AGENTES</h3>
           <Users className="w-4 h-4 text-[#B99A4B]" />
