@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Wind, Dumbbell, BrainCircuit, Eye, HeartPulse, Sparkles,
   Save, Edit3, ScrollText, Skull, Shield, Zap, Ghost,
-  Backpack, BookOpen, LogOut, X, Check, Search 
+  Backpack, BookOpen, LogOut, X, Check, Search, Menu
 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Link } from "react-router-dom";
@@ -14,6 +15,7 @@ import { useStompClient } from "@/hooks/useStompClient";
 import ImagemUploader, { RetratoElegante } from "@/components/ImagemUploader";
 import { hasAuthority } from "@/utils/auth";
 import { ShieldPlus } from "lucide-react";
+
 
 const FontImports = () => (
   <style>{`
@@ -85,6 +87,8 @@ const FichaPersonagem = () => {
   const idCasoAtivo = localStorage.getItem("idCasoAtivo");
   const stompClient = useStompClient(idCasoAtivo);
   const [isDeletando, setIsDeletando] = useState(false);
+  const [menuAberto, setMenuAberto] = useState(false);
+
 
 const handleDeletarPersonagem = async () => {
   if (!personagemAtivoId) return;
@@ -272,43 +276,94 @@ const handleDeletarPersonagem = async () => {
           </div>
         </div>
         <nav className="flex items-center gap-2">
-            {hasAuthority("admin::write") && (
-            <Link to="/admin/criar-usuario">
-              <Button className="bg-transparent border border-[#7A1230]/50 text-[#EAE0C4] hover:bg-[#7A1230]/10 font-mono-ieji text-xs gap-2 hidden sm:flex">
-                <ShieldPlus className="w-4 h-4" /> Novo Membro
-              </Button>
-            </Link>
-          )}
-          <Link to="/casos">
-            <Button className="bg-[#7A1230]/20 border border-[#7A1230]/50 text-[#EAE0C4] hover:bg-[#7A1230] font-mono-ieji text-xs gap-2 hidden sm:flex transition-colors">
-              <Search className="w-4 h-4" /> Investigar Caso
-            </Button>
-          </Link>
+  {hasAuthority("admin::write") && (
+    <Link to="/admin/criar-usuario">
+      <Button className="bg-transparent border border-[#7A1230]/50 text-[#EAE0C4] hover:bg-[#7A1230]/10 font-mono-ieji text-xs gap-2 hidden sm:flex">
+        <ShieldPlus className="w-4 h-4" /> Novo Membro
+      </Button>
+    </Link>
+  )}
+  <Link to="/casos">
+    <Button className="bg-[#7A1230]/20 border border-[#7A1230]/50 text-[#EAE0C4] hover:bg-[#7A1230] font-mono-ieji text-xs gap-2 hidden sm:flex transition-colors">
+      <Search className="w-4 h-4" /> Investigar Caso
+    </Button>
+  </Link>
+  <Link to="/inventario">
+    <Button className="bg-transparent border border-[#B99A4B]/50 text-[#EAE0C4] hover:bg-[#B99A4B]/10 font-mono-ieji text-xs gap-2 hidden sm:flex">
+      <Backpack className="w-4 h-4" /> Inventário
+    </Button>
+  </Link>
+  <Link to="/bestiario">
+    <Button className="bg-transparent border border-[#7A1230]/50 text-[#EAE0C4] hover:bg-[#7A1230]/10 font-mono-ieji text-xs gap-2 hidden sm:flex">
+      <Skull className="w-4 h-4" /> Bestiário
+    </Button>
+  </Link>
+  <Link to="/aetherys">
+    <Button className="bg-transparent border border-[#3F8574]/50 text-[#EAE0C4] hover:bg-[#3F8574]/10 font-mono-ieji text-xs gap-2 hidden sm:flex">
+      <BookOpen className="w-4 h-4" /> Aetherys
+    </Button>
+  </Link>
+  <Link to="/login">
+    <Button className="bg-transparent text-[#7A1230] hover:bg-[#7A1230]/10 font-mono-ieji text-xs gap-2 hidden sm:flex">
+      <LogOut className="w-4 h-4" /> <span className="hidden sm:inline">Sair</span>
+    </Button>
+  </Link>
 
-          <Link to="/inventario">
-            <Button className="bg-transparent border border-[#B99A4B]/50 text-[#EAE0C4] hover:bg-[#B99A4B]/10 font-mono-ieji text-xs gap-2 hidden sm:flex">
-              <Backpack className="w-4 h-4" /> Inventário
-            </Button>
-          </Link>
-
-          <Link to="/bestiario">
-            <Button className="bg-transparent border border-[#7A1230]/50 text-[#EAE0C4] hover:bg-[#7A1230]/10 font-mono-ieji text-xs gap-2 hidden sm:flex">
-              <Skull className="w-4 h-4" /> Bestiário
-            </Button>
-          </Link>
-
-          <Link to="/aetherys">
-            <Button className="bg-transparent border border-[#3F8574]/50 text-[#EAE0C4] hover:bg-[#3F8574]/10 font-mono-ieji text-xs gap-2 hidden sm:flex">
-              <BookOpen className="w-4 h-4" /> Aetherys
-            </Button>
-          </Link>
-          <Link to="/login">
-            <Button className="bg-transparent text-[#7A1230] hover:bg-[#7A1230]/10 font-mono-ieji text-xs gap-2">
-              <LogOut className="w-4 h-4" /> <span className="hidden sm:inline">Sair</span>
-            </Button>
-          </Link>
-        </nav>
+  {/* Botão hambúrguer — só existe abaixo do breakpoint sm */}
+  <button
+    onClick={() => setMenuAberto((v) => !v)}
+    className="sm:hidden w-9 h-9 rounded-full border-2 border-[#B99A4B]/50 flex items-center justify-center text-[#EAE0C4] hover:bg-[#B99A4B]/10"
+    aria-label="Abrir menu"
+  >
+    {menuAberto ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+  </button>
+</nav>
       </header>
+      <AnimatePresence>
+  {menuAberto && (
+    <motion.div
+      initial={{ height: 0, opacity: 0 }}
+      animate={{ height: "auto", opacity: 1 }}
+      exit={{ height: 0, opacity: 0 }}
+      className="sm:hidden overflow-hidden bg-[#15121A] border-b-2 border-[#B99A4B]/40 relative z-30"
+    >
+      <div className="flex flex-col gap-2 px-4 py-3">
+        {hasAuthority("admin::write") && (
+          <Link to="/admin/criar-usuario" onClick={() => setMenuAberto(false)}>
+            <Button className="w-full justify-start bg-transparent border border-[#7A1230]/50 text-[#EAE0C4] hover:bg-[#7A1230]/10 font-mono-ieji text-xs gap-2">
+              <ShieldPlus className="w-4 h-4" /> Novo Membro
+            </Button>
+          </Link>
+        )}
+        <Link to="/casos" onClick={() => setMenuAberto(false)}>
+          <Button className="w-full justify-start bg-[#7A1230]/20 border border-[#7A1230]/50 text-[#EAE0C4] hover:bg-[#7A1230] font-mono-ieji text-xs gap-2">
+            <Search className="w-4 h-4" /> Investigar Caso
+          </Button>
+        </Link>
+        <Link to="/inventario" onClick={() => setMenuAberto(false)}>
+          <Button className="w-full justify-start bg-transparent border border-[#B99A4B]/50 text-[#EAE0C4] hover:bg-[#B99A4B]/10 font-mono-ieji text-xs gap-2">
+            <Backpack className="w-4 h-4" /> Inventário
+          </Button>
+        </Link>
+        <Link to="/bestiario" onClick={() => setMenuAberto(false)}>
+          <Button className="w-full justify-start bg-transparent border border-[#7A1230]/50 text-[#EAE0C4] hover:bg-[#7A1230]/10 font-mono-ieji text-xs gap-2">
+            <Skull className="w-4 h-4" /> Bestiário
+          </Button>
+        </Link>
+        <Link to="/aetherys" onClick={() => setMenuAberto(false)}>
+          <Button className="w-full justify-start bg-transparent border border-[#3F8574]/50 text-[#EAE0C4] hover:bg-[#3F8574]/10 font-mono-ieji text-xs gap-2">
+            <BookOpen className="w-4 h-4" /> Aetherys
+          </Button>
+        </Link>
+        <Link to="/login" onClick={() => setMenuAberto(false)}>
+          <Button className="w-full justify-start bg-transparent text-[#7A1230] hover:bg-[#7A1230]/10 font-mono-ieji text-xs gap-2">
+            <LogOut className="w-4 h-4" /> Sair
+          </Button>
+        </Link>
+      </div>
+    </motion.div>
+  )}
+</AnimatePresence>
 
       {/* SELETOR DE PERSONAGENS — carrossel horizontal, pensado para toque/mobile */}
       {personagens.length > 0 && (
