@@ -431,29 +431,52 @@ export default function MonstroSessao({ idCaso }) {
     if (stompClient?.connected) {
       const subPv = stompClient.subscribe(`/topic/caso/${idCaso}/monstros`, (message) => {
         const monstroAtualizado = JSON.parse(message.body);
-        // Dispara o efeito de impacto para todos os clientes quando o PV cai (quem aplicou o dano
-        // já atualizou o PV localmente, então o eco chega com delta 0 e não repete a animação).
+        
+        // Buscamos a versão anterior do monstro na memória
         const anterior = monstrosRef.current.find((m) => m.id === monstroAtualizado.id);
+
+        // 1. Efeito de dano visual
         if (anterior && monstroAtualizado.pv < anterior.pv) {
           dispararEfeitoDano(anterior, monstroAtualizado.pv, anterior.pv - monstroAtualizado.pv);
         }
+
+        // 2. DETECÇÃO DE BATALHA (Backup): Se o backend atualizar o status de batalha por este canal geral, 
+        // nós detectamos a mudança e disparamos o aviso para todos na tela!
+        if (monstroAtualizado.emBatalha && (!anterior || !anterior.emBatalha)) {
+          setAvisoBatalha(monstroAtualizado.nome || anterior?.nome || "uma ameaça");
+        }
+
         setMonstros((prev) => {
           const existe = prev.some((m) => m.id === monstroAtualizado.id);
+          // Forçamos o 'conhecido' a ser true se entrou em batalha, para revelar a carta aos Agentes
+          const conhecido = monstroAtualizado.emBatalha ? true : (monstroAtualizado.conhecido ?? anterior?.conhecido);
+          const atualizado = { ...monstroAtualizado, conhecido };
+          
           return existe
-            ? prev.map((m) => (m.id === monstroAtualizado.id ? monstroAtualizado : m))
-            : [...prev, monstroAtualizado];
+            ? prev.map((m) => (m.id === monstroAtualizado.id ? atualizado : m))
+            : [...prev, atualizado];
         });
       });
 
       const subBatalha = stompClient.subscribe(`/topic/caso/${idCaso}/batalha`, (message) => {
-        const monstro = JSON.parse(message.body);
+        const payload = JSON.parse(message.body);
+
+        // Previne erro caso o backend mande apenas o ID do monstro (ex: um número 12 em vez do objeto)
+        const idMonstro = typeof payload === "number" ? payload : payload.id;
+        const anterior = monstrosRef.current.find((m) => m.id === idMonstro);
+        
+        // Se o payload não tiver o nome, pegamos da memória. Se não tiver na memória, colocamos um genérico.
+        const nomeDoMonstro = payload.nome || anterior?.nome || "uma criatura desconhecida";
+        setAvisoBatalha(nomeDoMonstro);
+
         setMonstros((prev) => {
-          const existe = prev.some((m) => m.id === monstro.id);
+          const existe = prev.some((m) => m.id === idMonstro);
+          const atualizacoes = typeof payload === "object" ? payload : {};
+          
           return existe
-            ? prev.map((m) => (m.id === monstro.id ? { ...m, ...monstro, conhecido: true } : m))
-            : [...prev, { ...monstro, conhecido: true }];
+            ? prev.map((m) => (m.id === idMonstro ? { ...m, ...atualizacoes, emBatalha: true, conhecido: true } : m))
+            : [...prev, { ...atualizacoes, id: idMonstro, emBatalha: true, conhecido: true }];
         });
-        setAvisoBatalha(monstro.nome);
       });
 
       return () => {
