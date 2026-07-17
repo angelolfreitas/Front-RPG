@@ -9,6 +9,7 @@ export default function ChatSessao({ idCaso }) {
   const [mensagens, setMensagens] = useState([]);
   const [novaMensagem, setNovaMensagem] = useState("");
   const [jogadoresOnline, setJogadoresOnline] = useState([]);
+  const [usuariosRegistrados, setUsuariosRegistrados] = useState([]);
   const stompClient = useRef(null);
   const messagesEndRef = useRef(null);
 
@@ -23,11 +24,10 @@ export default function ChatSessao({ idCaso }) {
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    
+
     // 1. Busca Histórico REST
     const fetchHistorico = async () => {
       try {
-        // Lembre-se de ajustar a URL base se usar o seu arquivo api.js
         const response = await fetch(`${API_URL}/chat/caso/${idCaso}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -40,9 +40,25 @@ export default function ChatSessao({ idCaso }) {
       }
     };
 
-    fetchHistorico();
+    // 2. Busca todos os usuários cadastrados no caso (não só os online)
+    const fetchUsuariosRegistrados = async () => {
+      try {
+        const response = await fetch(`${API_URL}/casos/${idCaso}/usuarios`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setUsuariosRegistrados(data);
+        }
+      } catch (error) {
+        console.error("Erro ao buscar usuários do caso:", error);
+      }
+    };
 
-    // 2. Conecta no WebSocket
+    fetchHistorico();
+    fetchUsuariosRegistrados();
+
+    // 3. Conecta no WebSocket
     const client = new Client({
       webSocketFactory: () => new SockJS(`${API_URL}/ws`),
       connectHeaders: { Authorization: `Bearer ${token}` },
@@ -64,30 +80,29 @@ export default function ChatSessao({ idCaso }) {
     return () => client.deactivate();
   }, [idCaso]);
 
-  // No seu ChatSessao.jsx
-const enviarMensagem = (e) => {
-  e.preventDefault();
-  const autorId = localStorage.getItem("usuarioId");
-  const personagemId = localStorage.getItem("personagemSelecionadoId");
+  const enviarMensagem = (e) => {
+    e.preventDefault();
+    const autorId = localStorage.getItem("usuarioId");
+    const personagemId = localStorage.getItem("personagemSelecionadoId");
 
-  if (!autorId) {
-    console.error("Erro: Usuário não identificado. Faça login novamente.");
-    return;
-  }
+    if (!autorId) {
+      console.error("Erro: Usuário não identificado. Faça login novamente.");
+      return;
+    }
 
-  if (novaMensagem.trim() && stompClient.current?.connected) {
-    stompClient.current.publish({
-      destination: `/app/caso/${idCaso}/chat`,
-      body: JSON.stringify({
-          idCaso: idCaso,
-          conteudo: novaMensagem,
-          authorId: Number(autorId),
-          personagemId: personagemId ? Number(personagemId) : null,
-      })
-    });
-    setNovaMensagem("");
-  }
-};
+    if (novaMensagem.trim() && stompClient.current?.connected) {
+      stompClient.current.publish({
+        destination: `/app/caso/${idCaso}/chat`,
+        body: JSON.stringify({
+            idCaso: idCaso,
+            conteudo: novaMensagem,
+            authorId: Number(autorId),
+            personagemId: personagemId ? Number(personagemId) : null,
+        })
+      });
+      setNovaMensagem("");
+    }
+  };
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 h-[75vh] max-h-[600px] w-full">
@@ -97,7 +112,7 @@ const enviarMensagem = (e) => {
           <ShieldAlert className="w-5 h-5 text-[#3F8574]" />
           <h3 className="font-display font-bold text-lg text-[#EAE0C4] leading-none mt-1">REGISTRO DE COMUNICAÇÃO</h3>
         </div>
-        
+
         <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#F5EFDD]">
           {mensagens.map((msg, idx) => (
             <div key={idx} className="flex flex-col">
@@ -129,7 +144,7 @@ const enviarMensagem = (e) => {
         </form>
       </div>
 
-      {/* ÁREA DE JOGADORES ONLINE */}
+      {/* ÁREA DE AGENTES — todos os cadastrados no caso, com indicador de online */}
       <div className="order-2 lg:order-none w-full lg:w-64 flex flex-col bg-[#EAE0C4] border-4 border-[#0B0A0D] rounded-sm shadow-[6px_6px_0px_0px_#B99A4B] lg:h-full overflow-hidden">
         <div className="bg-[#201A1E] px-4 py-3 flex items-center justify-between border-b-2 border-[#0B0A0D]">
           <h3 className="font-display font-bold text-lg text-[#EAE0C4] leading-none mt-1">AGENTES</h3>
@@ -137,17 +152,24 @@ const enviarMensagem = (e) => {
         </div>
         <div className="p-4 flex-1 bg-[#F5EFDD] overflow-y-auto">
           <span className="font-mono-ieji text-[10px] uppercase tracking-widest text-[#5b5346] mb-3 block">
-            Conectados ({jogadoresOnline.length})
+            Registrados ({usuariosRegistrados.length})
           </span>
           <ul className="space-y-2">
-            {jogadoresOnline.map((jogador) => (
-              <li key={jogador.id} className="flex items-center gap-2 font-mono-ieji text-sm text-[#201A1E]">
-                <span className="w-2 h-2 rounded-full bg-[#3F8574] border border-[#0B0A0D] animate-pulse"></span>
-                {jogador.username}
-              </li>
-            ))}
-            {jogadoresOnline.length === 0 && (
-              <li className="font-body text-[#5b5346] italic text-sm">Nenhum sinal detectado...</li>
+            {usuariosRegistrados.map((usuario) => {
+              const online = jogadoresOnline.some((j) => j.id === usuario.id);
+              return (
+                <li key={usuario.id} className="flex items-center gap-2 font-mono-ieji text-sm text-[#201A1E]">
+                  <span
+                    className={`w-2 h-2 rounded-full border border-[#0B0A0D] shrink-0 ${
+                      online ? "bg-[#3F8574] animate-pulse" : "bg-[#5b5346]/40"
+                    }`}
+                  />
+                  <span className={online ? "" : "opacity-50"}>{usuario.username}</span>
+                </li>
+              );
+            })}
+            {usuariosRegistrados.length === 0 && (
+              <li className="font-body text-[#5b5346] italic text-sm">Nenhum agente registrado nesta sessão.</li>
             )}
           </ul>
         </div>

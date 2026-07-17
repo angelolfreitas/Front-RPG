@@ -57,14 +57,17 @@ const SessaoRPG = () => {
           <UsuariosSessao idCaso={id} />
         </div>
 
-        {/* Mobile: gaveta lateral, só monta quando aberta */}
+        {/* Mobile: painel flutuante que se ajusta ao conteúdo, não a tela inteira */}
         {usuariosAbertos && (
-          <div className="fixed inset-0 z-40 sm:hidden">
+          <div className="fixed inset-0 z-40 sm:hidden flex justify-end">
             <div className="absolute inset-0 bg-black/60" onClick={() => setUsuariosAbertos(false)} />
-            <div className="absolute right-0 top-0 bottom-0 w-[85%] max-w-xs bg-[#15121A] border-l-2 border-[#3F8574]/40 p-4 overflow-y-auto">
-              <button onClick={() => setUsuariosAbertos(false)} className="mb-3 text-[#EAE0C4]">
-                <X className="w-5 h-5" />
-              </button>
+            <div className="relative w-[85%] max-w-xs mt-[76px] mr-3 max-h-[75vh] bg-[#15121A] border-2 border-[#3F8574]/40 rounded-sm p-4 overflow-y-auto shadow-[6px_6px_0px_0px_#0B0A0D]">
+              <div className="flex items-center justify-between mb-3">
+                <span className="font-mono-ieji text-[10px] uppercase tracking-widest text-[#3F8574]">Participantes</span>
+                <button onClick={() => setUsuariosAbertos(false)} className="text-[#EAE0C4] hover:text-[#7A1230] transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
               <UsuariosSessao idCaso={id} />
             </div>
           </div>
