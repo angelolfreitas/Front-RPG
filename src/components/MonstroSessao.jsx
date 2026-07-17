@@ -30,10 +30,32 @@ const MATERIAL_OPTIONS = ["CARNE", "ESPECTRAL"];
 /**
  * Paleta/forma do efeito de impacto por material.
  * Adicione novas entradas aqui quando quiser mais materiais (ex.: METAL, PLANTA).
+ *
+ * corParticula -> tons usados nas gotas/fragmentos que voam do impacto
+ * corGlow      -> brilho/realce sutil sobre a partícula (dá volume/"molhado")
+ * corPoça      -> array de tons pra poça orgânica (null = material não empoça)
+ * corFlash     -> cor do flash de tela no instante do impacto
+ * modoMistura  -> mix-blend-mode usado nas partículas (dá integração com o fundo)
  */
 const MATERIAL_CONFIG = {
-  CARNE: { label: "Carne", corBase: ["#7A1230", "#4A0A1D", "#5b0f26"], corPoça: "#3D0812" },
-  ESPECTRAL: { label: "Espectral", corBase: ["#3F8574", "#274E45", "#6fb3a0"], corPoça: null },
+  CARNE: {
+    label: "Carne",
+    tipo: "sangue",
+    corParticula: ["#8a1220", "#5c0f1a", "#3d0810", "#a3283f", "#2a0508"],
+    corGlow: "rgba(200, 60, 70, 0.55)",
+    corPoça: ["#2a0508", "#3d0810", "#1a0305"],
+    corFlash: "rgba(90, 10, 20, 0.38)",
+    modoMistura: "multiply",
+  },
+  ESPECTRAL: {
+    label: "Espectral",
+    tipo: "sombra",
+    corParticula: ["#0d0912", "#150f1e", "#1c1526", "#090610"],
+    corGlow: "rgba(80, 50, 110, 0.35)",
+    corPoça: null,
+    corFlash: "rgba(8, 5, 16, 0.55)",
+    modoMistura: "normal",
+  },
 };
 
 function classificarSeveridade(percentualPerdido, vidaChegouAZero) {
@@ -43,31 +65,76 @@ function classificarSeveridade(percentualPerdido, vidaChegouAZero) {
 }
 
 const INTENSIDADE = {
-  normal: { particulas: 10, shake: 3, flash: 0.15, duracao: 0.5 },
-  critico: { particulas: 22, shake: 7, flash: 0.32, duracao: 0.7 },
-  abate: { particulas: 38, shake: 11, flash: 0.5, duracao: 1.1 },
+  normal: { particulas: 7, respingos: 3, shake: 3, flash: 0.6, duracao: 0.75 },
+  critico: { particulas: 13, respingos: 6, shake: 7, flash: 0.85, duracao: 1.0 },
+  abate: { particulas: 20, respingos: 10, shake: 11, flash: 1, duracao: 1.4 },
 };
 
-function gerarParticulas(qtd) {
+/**
+ * Gera gotas de sangue com trajetória em arco (gravidade real): sobem um pouco,
+ * ganham velocidade na queda e terminam em posições mais baixas/espalhadas.
+ * Cada gota carrega seu próprio "peso" (afeta a queda) e alongamento (esguicho vs pingo).
+ */
+function gerarParticulasSangue(qtd) {
   return Array.from({ length: qtd }, (_, i) => {
-    const angulo = Math.random() * Math.PI * 2;
-    const distancia = 30 + Math.random() * 90;
+    const angulo = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.6;
+    const forca = 40 + Math.random() * 100;
+    const peso = 0.6 + Math.random() * 0.9;
     return {
       id: i,
-      x: Math.cos(angulo) * distancia,
-      y: Math.sin(angulo) * distancia * 0.6 + Math.random() * 40,
-      escala: 0.4 + Math.random() * 1.4,
-      rotacao: Math.random() * 360,
-      atraso: Math.random() * 0.15,
+      xFinal: Math.cos(angulo) * forca,
+      yPico: -18 - Math.random() * 26,
+      yFinal: Math.sin(angulo) * forca * 0.35 + 60 + peso * 40,
+      largura: 4 + Math.random() * 7,
+      altura: 6 + Math.random() * 11,
+      alongamento: 1 + Math.random() * 1.8,
+      rotacao: (Math.random() - 0.5) * 140,
+      atraso: Math.random() * 0.12,
+      cor: i,
+      persiste: Math.random() > 0.45,
     };
   });
+}
+
+/** Respingos finos: linhas de sangue que esguicham e "grudam", ficando mais tempo na tela. */
+function gerarRespingos(qtd) {
+  return Array.from({ length: qtd }, (_, i) => {
+    const angulo = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.3;
+    const dist = 50 + Math.random() * 110;
+    return {
+      id: i,
+      x: Math.cos(angulo) * dist,
+      y: Math.sin(angulo) * dist * 0.5 + 50,
+      comprimento: 22 + Math.random() * 46,
+      espessura: 1.5 + Math.random() * 2.5,
+      rotacao: (angulo * 180) / Math.PI + 90,
+      atraso: Math.random() * 0.1,
+    };
+  });
+}
+
+/** Fumaça espectral: névoa escura que sobe, se dissipa e gira lentamente, ao invés de "explodir". */
+function gerarFumaca(qtd) {
+  return Array.from({ length: qtd }, (_, i) => ({
+    id: i,
+    x: (Math.random() - 0.5) * 90,
+    yFinal: -90 - Math.random() * 110,
+    escala: 1.1 + Math.random() * 2.2,
+    rotacaoFinal: (Math.random() - 0.5) * 60,
+    atraso: Math.random() * 0.25,
+    duracaoExtra: Math.random() * 0.5,
+    blur: 6 + Math.random() * 10,
+  }));
 }
 
 function EfeitoImpacto({ material, severidade, onFim }) {
   const cfg = MATERIAL_CONFIG[material] || MATERIAL_CONFIG.CARNE;
   const intensidade = INTENSIDADE[severidade];
-  const particulas = useRef(gerarParticulas(intensidade.particulas)).current;
   const espectral = material === "ESPECTRAL";
+
+  const gotas = useRef(!espectral ? gerarParticulasSangue(intensidade.particulas) : []).current;
+  const respingos = useRef(!espectral ? gerarRespingos(intensidade.respingos) : []).current;
+  const fumaca = useRef(espectral ? gerarFumaca(intensidade.particulas) : []).current;
 
   return (
     <motion.div
@@ -77,48 +144,146 @@ function EfeitoImpacto({ material, severidade, onFim }) {
       exit={{ opacity: 0 }}
       onAnimationComplete={onFim}
     >
+      {/* Flash de impacto: mais um "golpe" na tela do que um tingimento parelho */}
       <motion.div
-        className="fixed inset-0 pointer-events-none z-40"
-        style={{ backgroundColor: espectral ? "#3F857440" : "#7A123055" }}
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: espectral
+            ? `radial-gradient(circle at 50% 55%, ${cfg.corFlash}, transparent 70%)`
+            : `radial-gradient(circle at 50% 60%, ${cfg.corFlash}, transparent 65%)`,
+        }}
         initial={{ opacity: intensidade.flash }}
         animate={{ opacity: 0 }}
-        transition={{ duration: intensidade.duracao * 0.6 }}
+        transition={{ duration: intensidade.duracao * (espectral ? 0.9 : 0.45), ease: "easeOut" }}
       />
 
-      {particulas.map((p) => (
-        <motion.div
-          key={p.id}
-          className="absolute left-1/2 top-1/2"
-          style={{
-            width: espectral ? 18 : 10 + p.escala * 6,
-            height: espectral ? 18 : 8 + p.escala * 5,
-            backgroundColor: cfg.corBase[p.id % cfg.corBase.length],
-            borderRadius: espectral ? "50%" : "40% 60% 55% 45% / 50% 45% 55% 50%",
-            filter: espectral ? "blur(6px)" : "none",
-          }}
-          initial={{ x: 0, y: 0, opacity: espectral ? 0.7 : 1, scale: 0.3, rotate: 0 }}
-          animate={
-            espectral
-              ? { x: p.x * 0.5, y: p.y - 60, opacity: 0, scale: p.escala * 1.8 }
-              : { x: p.x, y: p.y, opacity: [1, 1, 0.9, 0], scale: p.escala, rotate: p.rotacao }
-          }
-          transition={{ duration: intensidade.duracao, delay: p.atraso, ease: [0.19, 1, 0.22, 1] }}
-        />
-      ))}
-
       {!espectral &&
-        particulas.slice(0, Math.ceil(intensidade.particulas / 3)).map((p) => (
+        gotas.map((g) => (
           <motion.div
-            key={`fio-${p.id}`}
-            className="absolute left-1/2 top-1/2 rounded-full"
-            style={{ width: 3 + Math.random() * 3, backgroundColor: cfg.corBase[0] }}
-            initial={{ x: p.x * 0.6, y: p.y * 0.5, height: 0, opacity: 0.9 }}
-            animate={{ height: 40 + Math.random() * 50, opacity: [0.9, 0.9, 0] }}
-            transition={{ duration: intensidade.duracao * 1.4, delay: p.atraso + 0.1, ease: "easeIn" }}
+            key={`gota-${g.id}`}
+            className="absolute left-1/2 top-1/2"
+            style={{
+              width: g.largura,
+              height: g.altura * g.alongamento,
+              background: `radial-gradient(circle at 32% 28%, ${cfg.corGlow}, ${
+                cfg.corParticula[g.cor % cfg.corParticula.length]
+              } 55%, #1a0305 100%)`,
+              borderRadius: "50% 50% 50% 50% / 62% 62% 38% 38%",
+              mixBlendMode: cfg.modoMistura,
+              boxShadow: "0 1px 2px rgba(0,0,0,0.4)",
+            }}
+            initial={{ x: 0, y: 0, opacity: 0.95, scale: 0.3, rotate: 0, filter: "blur(0px)" }}
+            animate={{
+              x: [0, g.xFinal * 0.5, g.xFinal],
+              y: [0, g.yPico, g.yFinal],
+              scale: [0.3, 1.05, g.persiste ? 0.92 : 0.75],
+              rotate: g.rotacao,
+              opacity: g.persiste ? [0.95, 1, 0.9] : [0.95, 1, 0],
+              filter: ["blur(0px)", "blur(1.5px)", "blur(0px)"],
+            }}
+            transition={{
+              duration: intensidade.duracao,
+              delay: g.atraso,
+              times: [0, 0.4, 1],
+              ease: [0.36, 0, 0.66, -0.06],
+            }}
           />
         ))}
+
+      {!espectral &&
+        respingos.map((r) => (
+          <motion.div
+            key={`respingo-${r.id}`}
+            className="absolute left-1/2 top-1/2 origin-top"
+            style={{
+              width: r.espessura,
+              background: `linear-gradient(to bottom, ${cfg.corParticula[0]}, ${cfg.corParticula[2]} 70%, transparent)`,
+              borderRadius: "50% 50% 60% 60% / 20% 20% 80% 80%",
+              mixBlendMode: cfg.modoMistura,
+            }}
+            initial={{
+              x: 0,
+              y: 0,
+              height: 0,
+              opacity: 0.9,
+              rotate: r.rotacao,
+            }}
+            animate={{
+              x: r.x,
+              y: r.y,
+              height: [0, r.comprimento, r.comprimento * 0.85],
+              opacity: [0.9, 0.95, 0.7],
+            }}
+            transition={{
+              duration: intensidade.duracao * 0.85,
+              delay: r.atraso,
+              ease: "easeOut",
+            }}
+          />
+        ))}
+
+      {espectral &&
+        fumaca.map((f) => (
+          <motion.div
+            key={`fumaca-${f.id}`}
+            className="absolute left-1/2 top-1/2 rounded-full"
+            style={{
+              width: 34,
+              height: 34,
+              background: `radial-gradient(circle, ${cfg.corParticula[f.id % cfg.corParticula.length]} 0%, rgba(0,0,0,0.55) 55%, transparent 78%)`,
+              filter: `blur(${f.blur}px)`,
+            }}
+            initial={{ x: 0, y: 10, opacity: 0.75, scale: 0.5, rotate: 0 }}
+            animate={{
+              x: f.x,
+              y: f.yFinal,
+              opacity: [0.75, 0.55, 0],
+              scale: f.escala,
+              rotate: f.rotacaoFinal,
+            }}
+            transition={{
+              duration: intensidade.duracao + f.duracaoExtra,
+              delay: f.atraso,
+              ease: "easeOut",
+            }}
+          />
+        ))}
+
+      {espectral && (
+        <motion.div
+          className="absolute left-1/2 top-1/2 rounded-full"
+          style={{
+            width: 10,
+            height: 10,
+            background: "radial-gradient(circle, rgba(120,90,160,0.9), transparent 70%)",
+            filter: "blur(1px)",
+          }}
+          initial={{ opacity: 1, scale: 0.4 }}
+          animate={{ opacity: 0, scale: 5 }}
+          transition={{ duration: intensidade.duracao * 0.6, ease: "easeOut" }}
+        />
+      )}
     </motion.div>
   );
+}
+
+/** Formas de poça orgânicas: 3 manchas sobrepostas com raios/rotações levemente aleatórios,
+ *  geradas uma única vez por monstro pra não "piscar" a cada re-render. */
+function useFormatoPoça(id, ativo) {
+  const cache = useRef({});
+  if (ativo && !cache.current[id]) {
+    cache.current[id] = Array.from({ length: 3 }, () => ({
+      dx: (Math.random() - 0.5) * 30,
+      escalaX: 0.75 + Math.random() * 0.5,
+      escalaY: 0.5 + Math.random() * 0.35,
+      raio: `${40 + Math.random() * 20}% ${60 - Math.random() * 20}% ${50 + Math.random() * 20}% ${
+        50 - Math.random() * 20
+      }% / ${55 + Math.random() * 15}% ${50 + Math.random() * 10}% ${45 - Math.random() * 10}% ${
+        60 - Math.random() * 15
+      }%`,
+    }));
+  }
+  return cache.current[id];
 }
 
 export default function MonstroSessao({ idCaso }) {
@@ -457,6 +622,7 @@ export default function MonstroSessao({ idCaso }) {
               const emBatalha = m.emBatalha;
               const cfgMaterial = MATERIAL_CONFIG[m.material] || MATERIAL_CONFIG.CARNE;
               const poçaIntensidade = poças[m.id] || 0;
+              const formatoPoça = useFormatoPoça(m.id, poçaIntensidade > 0 && !!cfgMaterial.corPoça);
 
               const statusLabel = morto ? "Abatido" : critico ? "Crítico" : pct <= 60 ? "Ferido" : "Saudável";
               const statusColor = morto ? "#5b5346" : critico ? "#7A1230" : pct <= 60 ? "#B99A4B" : "#3F8574";
@@ -482,17 +648,29 @@ export default function MonstroSessao({ idCaso }) {
                     transition={{ duration: 0.35 }}
                     className="relative flex flex-col flex-1"
                   >
-                    {cfgMaterial.corPoça && poçaIntensidade > 0 && (
-                      <motion.div
-                        className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-[50%] pointer-events-none z-0"
-                        style={{ backgroundColor: cfgMaterial.corPoça, filter: "blur(2px)" }}
-                        animate={{
-                          width: 60 + poçaIntensidade * 160,
-                          height: 14 + poçaIntensidade * 30,
-                          opacity: 0.55 + poçaIntensidade * 0.35,
-                        }}
-                        transition={{ duration: 0.6, ease: "easeOut" }}
-                      />
+                    {cfgMaterial.corPoça && poçaIntensidade > 0 && formatoPoça && (
+                      <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-full h-10 pointer-events-none z-0 overflow-visible">
+                        {formatoPoça.map((blob, idx) => (
+                          <motion.div
+                            key={idx}
+                            className="absolute bottom-0"
+                            style={{
+                              left: `calc(50% + ${blob.dx}px)`,
+                              transform: `translateX(-50%) scale(${blob.escalaX}, ${blob.escalaY})`,
+                              borderRadius: blob.raio,
+                              background: `radial-gradient(ellipse at center, ${cfgMaterial.corPoça[0]}, ${cfgMaterial.corPoça[1]} 60%, transparent 90%)`,
+                              mixBlendMode: "multiply",
+                              filter: "blur(1.5px)",
+                            }}
+                            animate={{
+                              width: 50 + poçaIntensidade * 150,
+                              height: 16 + poçaIntensidade * 28,
+                              opacity: 0.5 + poçaIntensidade * 0.4,
+                            }}
+                            transition={{ duration: 0.7, ease: "easeOut" }}
+                          />
+                        ))}
+                      </div>
                     )}
 
                     <AnimatePresence>
