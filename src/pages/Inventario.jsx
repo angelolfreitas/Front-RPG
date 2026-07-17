@@ -70,7 +70,7 @@ const Inventario = () => {
     fetchAll();
   } catch (error) {
     if (error.response?.status === 409) {
-      alert(error.response.data.message);
+      alert(error.response?.data?.message || "Não foi possível adicionar o item — verifique o estoque disponível.");
     } else {
       console.error("Erro ao adicionar item ao inventário:", error);
     }
@@ -124,9 +124,9 @@ const handleChangeQuantity = async (entry, delta) => {
     fetchAll();
   } catch (error) {
     if (error.response?.status === 409) {
-      alert(error.response.data.message);
+      alert(error.response?.data?.message || "Não foi possível adicionar o item — verifique o estoque disponível.");
     } else {
-      console.error("Erro ao alterar quantidade:", error);
+      console.error("Erro ao adicionar item ao inventário:", error);
     }
   }
 };
@@ -156,7 +156,7 @@ const handleChangeQuantity = async (entry, delta) => {
 
       <main className="max-w-6xl mx-auto px-4 md:px-8 py-10 relative z-10">
 
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+        <div className="flex flex-col gap-4 mb-8">
           <div className="relative w-full md:w-72">
             <Search className="w-4 h-4 text-[#5b5346] absolute left-3 top-1/2 -translate-y-1/2" />
             <input
@@ -166,18 +166,18 @@ const handleChangeQuantity = async (entry, delta) => {
               className="w-full bg-[#EAE0C4] border-2 border-[#0B0A0D] rounded-sm pl-9 pr-3 py-2 font-mono-ieji text-sm text-[#201A1E] focus:outline-none focus:border-[#7A1230]"
             />
           </div>
-          <div className="flex gap-2 w-full md:w-auto">
+          <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto md:self-end">
             {podeCriarItem && (
-              <Button onClick={() => setIsCatalogModalOpen(true)} className="flex-1 md:flex-none bg-transparent border-2 border-[#B99A4B] text-[#EAE0C4] hover:bg-[#B99A4B]/10 font-mono-ieji text-xs gap-2">
-                <Package className="w-4 h-4" /> Novo item no catálogo
+              <Button onClick={() => setIsCatalogModalOpen(true)} className="w-full sm:w-auto justify-center bg-transparent border-2 border-[#B99A4B] text-[#EAE0C4] hover:bg-[#B99A4B]/10 font-mono-ieji text-xs gap-2 whitespace-normal py-2.5">
+                <Package className="w-4 h-4 shrink-0" /> Novo item no catálogo
               </Button>
             )}
             <Button
               onClick={() => setIsModalOpen(true)}
               disabled={!personagemId}
-              className="flex-1 md:flex-none bg-[#7A1230] text-[#EAE0C4] hover:bg-[#EAE0C4] hover:text-[#201A1E] border-2 border-[#0B0A0D] font-display font-bold gap-2 shadow-[3px_3px_0px_0px_#B99A4B] disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full sm:w-auto justify-center bg-[#7A1230] text-[#EAE0C4] hover:bg-[#EAE0C4] hover:text-[#201A1E] border-2 border-[#0B0A0D] font-display font-bold gap-2 shadow-[3px_3px_0px_0px_#B99A4B] disabled:opacity-40 disabled:cursor-not-allowed whitespace-normal py-2.5"
             >
-              <Plus className="w-4 h-4" /> Adicionar ao inventário
+              <Plus className="w-4 h-4 shrink-0" /> Adicionar ao inventário
             </Button>
           </div>
         </div>

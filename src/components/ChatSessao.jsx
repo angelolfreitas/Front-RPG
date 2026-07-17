@@ -107,7 +107,7 @@ const enviarMensagem = (e) => {
                   {new Date(msg.enviadoEm).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>
-              <p className="font-body text-[#201A1E] text-base leading-snug bg-[#EAE0C4] border border-[#0B0A0D]/20 p-2.5 rounded-sm w-fit max-w-[85%]">
+             <p className="font-body text-[#201A1E] text-base leading-snug bg-[#EAE0C4] border border-[#0B0A0D]/20 p-2.5 rounded-sm w-fit max-w-[85%] break-words whitespace-pre-wrap [overflow-wrap:anywhere]">
                 {msg.conteudo}
               </p>
             </div>

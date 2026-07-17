@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   BookOpen, Sparkles, Plus, X, ArrowLeft, Check,
-  Ghost, Moon, Waves, Link2, Dices, BrainCircuit, Feather
+  Ghost, Moon, Waves, Link2, Dices, BrainCircuit, Feather, Trash2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -36,6 +36,22 @@ const Aetherys = () => {
   const [selecionadoId, setSelecionadoId] = useState(() => localStorage.getItem("aetherysSelecionado"));
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const podeDeletar = hasAuthority("admin::write");
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Remover este Aetherys do Codex? Essa ação não pode ser desfeita.")) return;
+    try {
+      await api.delete(`/aetherys/${id}`);
+      setLista((prev) => prev.filter((a) => a.id !== id));
+      if (selecionadoId === String(id)) {
+        setSelecionadoId(null);
+        localStorage.removeItem("aetherysSelecionado");
+      }
+    } catch (error) {
+      console.error("Erro ao deletar Aetherys:", error);
+      alert("Não foi possível remover este Aetherys.");
+    }
+  };
 
   const fetchAetherys = async () => {
     try {
@@ -131,12 +147,24 @@ const Aetherys = () => {
                       <Check className="w-3.5 h-3.5" />
                     </div>
                   )}
-                  <div className="bg-[#201A1E] px-5 py-4 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#3F8574]/20 border border-[#3F8574] flex items-center justify-center shrink-0">
-                      <Icon className="w-5 h-5 text-[#3F8574]" />
+                  <div className="bg-[#201A1E] px-5 py-4 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-[#3F8574]/20 border border-[#3F8574] flex items-center justify-center shrink-0">
+                          <Icon className="w-5 h-5 text-[#3F8574]" />
+                        </div>
+                        <h3 className="font-display font-bold text-lg text-[#EAE0C4] leading-tight truncate">{a.nome}</h3>
+                      </div>
+                      {podeDeletar && (
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(a.id)}
+                          className="shrink-0 w-7 h-7 rounded-sm border border-[#7A1230] text-[#7A1230] hover:bg-[#7A1230] hover:text-[#EAE0C4] flex items-center justify-center transition-colors"
+                          title="Remover Aetherys"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
-                    <h3 className="font-display font-bold text-lg text-[#EAE0C4] leading-tight">{a.nome}</h3>
-                  </div>
                   <div className="p-5 flex-1 flex flex-col">
                     <p className="font-mono-ieji text-[10px] uppercase tracking-widest text-[#5b5346] mb-1">Função</p>
                     <p className="font-body text-[#201A1E] text-base leading-snug mb-4 flex-1">{a.funcao}</p>

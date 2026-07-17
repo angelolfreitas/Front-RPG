@@ -52,6 +52,9 @@ export default function MonstroSessao({ idCaso }) {
       setIsLoading(false);
     }
   };
+  const monstrosOrdenados = [...monstros].sort((a, b) =>
+    a.emBatalha === b.emBatalha ? 0 : a.emBatalha ? -1 : 1
+  );
 
   useEffect(() => {
     fetchMonstros();
@@ -206,6 +209,17 @@ export default function MonstroSessao({ idCaso }) {
     setEditForm((f) => ({ ...f, emBatalha: true }));
     setTimeout(() => setIsIniciandoBatalha(false), 800);
   };
+  const handleDeletarRapido = async (e, monstro) => {
+    e.stopPropagation();
+    if (!window.confirm(`Deletar "${monstro.nome}" do bestiário? Essa ação não pode ser desfeita.`)) return;
+    try {
+      await api.delete(`/monstro/${monstro.id}`);
+      setMonstros((prev) => prev.filter((m) => m.id !== monstro.id));
+    } catch (error) {
+      console.error("Erro ao deletar monstro:", error);
+      alert("Não foi possível deletar o monstro.");
+    }
+  };
 
   const iniciarBatalhaCard = (monstro) => {
     if (!stompClient?.connected) return;
@@ -280,7 +294,7 @@ export default function MonstroSessao({ idCaso }) {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
           <AnimatePresence>
-            {monstros.map((m) => {
+            {monstrosOrdenados.map((m) => {
               // Ameaça não identificada — jogador que ainda não encontrou o monstro
               if (!podeGerenciar && !m.conhecido) {
                 return (
@@ -330,6 +344,17 @@ export default function MonstroSessao({ idCaso }) {
                     <div className="absolute top-0 right-0 bg-[#7A1230] text-[#EAE0C4] font-mono-ieji text-[9px] uppercase tracking-widest px-2 py-1 flex items-center gap-1 z-10">
                       <Swords className="w-3 h-3" /> Em batalha
                     </div>
+                  )}
+
+                  {podeGerenciar && (
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeletarRapido(e, m)}
+                      className="absolute top-2 left-2 z-10 w-7 h-7 rounded-sm bg-[#0B0A0D]/70 border border-[#7A1230] text-[#7A1230] hover:bg-[#7A1230] hover:text-[#EAE0C4] flex items-center justify-center transition-colors"
+                      title="Deletar monstro"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   )}
 
                   <div className="bg-[#201A1E] relative">
