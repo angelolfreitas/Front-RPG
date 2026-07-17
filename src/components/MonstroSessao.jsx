@@ -373,6 +373,39 @@ export default function MonstroSessao({ idCaso }) {
   const [manchas, setManchas] = useState({});
   const [tremores, setTremores] = useState({});
 
+  // Espelha a lista atual para o handler do WebSocket comparar o PV anterior sem fechar sobre estado obsoleto.
+  const monstrosRef = useRef([]);
+  useEffect(() => {
+    monstrosRef.current = monstros;
+  }, [monstros]);
+
+  const dispararTremor = useCallback((id) => {
+    setTremores((prev) => ({ ...prev, [id]: true }));
+    setTimeout(() => setTremores((prev) => ({ ...prev, [id]: false })), 350);
+  }, []);
+
+  // Efeito visual de impacto (tremor + partículas + mancha). Usado tanto por quem aplica o dano
+  // quanto pelo handler do WebSocket, para que todos os jogadores vejam a animação.
+  const dispararEfeitoDano = useCallback(
+    (monstro, novoPv, danoAplicado) => {
+      const percentualPerdido = danoAplicado / (monstro.pvMaximo || monstro.pv || 1);
+      const severidade = classificarSeveridade(percentualPerdido, novoPv === 0);
+      const cfgMaterial = MATERIAL_CONFIG[monstro.material] || MATERIAL_CONFIG.CARNE;
+
+      dispararTremor(monstro.id);
+      setEfeitosAtivos((prev) => ({ ...prev, [monstro.id]: { severidade, key: Date.now() } }));
+
+      if (cfgMaterial.corMancha) {
+        setManchas((prev) => {
+          const atuais = prev[monstro.id] || [];
+          const novaLista = [...atuais, criarMancha(severidade)].slice(-5);
+          return { ...prev, [monstro.id]: novaLista };
+        });
+      }
+    },
+    [dispararTremor]
+  );
+
   const podeGerenciar = hasAuthority("admin::write");
 
   const fetchMonstros = async () => {
@@ -398,6 +431,12 @@ export default function MonstroSessao({ idCaso }) {
     if (stompClient?.connected) {
       const subPv = stompClient.subscribe(`/topic/caso/${idCaso}/monstros`, (message) => {
         const monstroAtualizado = JSON.parse(message.body);
+        // Dispara o efeito de impacto para todos os clientes quando o PV cai (quem aplicou o dano
+        // já atualizou o PV localmente, então o eco chega com delta 0 e não repete a animação).
+        const anterior = monstrosRef.current.find((m) => m.id === monstroAtualizado.id);
+        if (anterior && monstroAtualizado.pv < anterior.pv) {
+          dispararEfeitoDano(anterior, monstroAtualizado.pv, anterior.pv - monstroAtualizado.pv);
+        }
         setMonstros((prev) => {
           const existe = prev.some((m) => m.id === monstroAtualizado.id);
           return existe
@@ -422,7 +461,7 @@ export default function MonstroSessao({ idCaso }) {
         subBatalha.unsubscribe();
       };
     }
-  }, [idCaso, stompClient]);
+  }, [idCaso, stompClient, dispararEfeitoDano]);
 
   const atualizarPv = async (monstro, novoPv) => {
     setMonstros((prev) => prev.map((m) => (m.id === monstro.id ? { ...m, pv: novoPv } : m)));
@@ -450,32 +489,14 @@ export default function MonstroSessao({ idCaso }) {
     }
   };
 
-  const dispararTremor = useCallback((id) => {
-    setTremores((prev) => ({ ...prev, [id]: true }));
-    setTimeout(() => setTremores((prev) => ({ ...prev, [id]: false })), 350);
-  }, []);
-
   const aplicarDanoEmMassa = (monstro) => {
     const dano = parseInt(danoInputs[monstro.id], 10);
     if (!dano || dano <= 0) return;
 
     const novoPv = Math.max(0, monstro.pv - dano);
-    const percentualPerdido = dano / (monstro.pvMaximo || monstro.pv || 1);
-    const severidade = classificarSeveridade(percentualPerdido, novoPv === 0);
-    const cfgMaterial = MATERIAL_CONFIG[monstro.material] || MATERIAL_CONFIG.CARNE;
 
     atualizarPv(monstro, novoPv);
-    dispararTremor(monstro.id);
-
-    setEfeitosAtivos((prev) => ({ ...prev, [monstro.id]: { severidade, key: Date.now() } }));
-
-    if (cfgMaterial.corMancha) {
-      setManchas((prev) => {
-        const atuais = prev[monstro.id] || [];
-        const novaLista = [...atuais, criarMancha(severidade)].slice(-5);
-        return { ...prev, [monstro.id]: novaLista };
-      });
-    }
+    dispararEfeitoDano(monstro, novoPv, dano);
 
     setDanoInputs((prev) => ({ ...prev, [monstro.id]: "" }));
   };
