@@ -58,6 +58,7 @@ const CasosList = () => {
     const form = e.target;
     
     const payload = {
+      ...(casoEditando && { id: casoEditando.id }),
       nomeCaso: form.nomeCaso.value,
       resumo: form.resumo.value,
       objetivo: form.objetivo.value,
@@ -68,7 +69,7 @@ const CasosList = () => {
     try {
       if (casoEditando) {
         // Atualiza o caso existente
-        const response = await api.put(`/casos/${casoEditando.id}`, payload);
+        const response = await api.put(`/casos`, payload);
         setCasos((prev) => prev.map((c) => (c.id === casoEditando.id ? response.data : c)));
       } else {
         // Cria um novo caso
