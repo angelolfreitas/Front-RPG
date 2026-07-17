@@ -33,8 +33,9 @@ const MATERIAL_OPTIONS = ["CARNE", "ESPECTRAL"];
  *
  * corParticula -> tons usados nas gotas/fragmentos que voam do impacto
  * corGlow      -> brilho/realce sutil sobre a partícula (dá volume/"molhado")
- * corPoça      -> array de tons pra poça orgânica (null = material não empoça)
+ * corMancha    -> tons usados na marca de ferimento que fica no retrato (null = não marca)
  * corFlash     -> cor do flash de tela no instante do impacto
+ * corSlash     -> cor do rasgão/golpe visível em ataques fortes (null = sem rasgão)
  * modoMistura  -> mix-blend-mode usado nas partículas (dá integração com o fundo)
  */
 const MATERIAL_CONFIG = {
@@ -43,17 +44,19 @@ const MATERIAL_CONFIG = {
     tipo: "sangue",
     corParticula: ["#8a1220", "#5c0f1a", "#3d0810", "#a3283f", "#2a0508"],
     corGlow: "rgba(200, 60, 70, 0.55)",
-    corPoça: ["#2a0508", "#3d0810", "#1a0305"],
-    corFlash: "rgba(90, 10, 20, 0.38)",
+    corMancha: ["#4a0d14", "#2a0508", "#5c0f1a"],
+    corFlash: "rgba(150, 20, 30, 0.5)",
+    corSlash: "rgba(255, 235, 225, 0.85)",
     modoMistura: "multiply",
   },
   ESPECTRAL: {
     label: "Espectral",
     tipo: "sombra",
     corParticula: ["#0d0912", "#150f1e", "#1c1526", "#090610"],
-    corGlow: "rgba(80, 50, 110, 0.35)",
-    corPoça: null,
-    corFlash: "rgba(8, 5, 16, 0.55)",
+    corGlow: "rgba(120, 80, 160, 0.45)",
+    corMancha: ["rgba(30,20,45,0.55)", "rgba(15,10,25,0.6)"],
+    corFlash: "rgba(90, 60, 130, 0.45)",
+    corSlash: null,
     modoMistura: "normal",
   },
 };
@@ -65,97 +68,152 @@ function classificarSeveridade(percentualPerdido, vidaChegouAZero) {
 }
 
 const INTENSIDADE = {
-  normal: { particulas: 7, respingos: 3, shake: 3, flash: 0.6, duracao: 0.75 },
-  critico: { particulas: 13, respingos: 6, shake: 7, flash: 0.85, duracao: 1.0 },
-  abate: { particulas: 20, respingos: 10, shake: 11, flash: 1, duracao: 1.4 },
+  normal: { particulas: 5, respingos: 2, shake: 3, flash: 0.55, duracao: 0.6 },
+  critico: { particulas: 8, respingos: 4, shake: 6, flash: 0.75, duracao: 0.8 },
+  abate: { particulas: 12, respingos: 6, shake: 9, flash: 0.9, duracao: 1.05 },
 };
 
 /**
- * Gera gotas de sangue com trajetória em arco (gravidade real): sobem um pouco,
- * ganham velocidade na queda e terminam em posições mais baixas/espalhadas.
- * Cada gota carrega seu próprio "peso" (afeta a queda) e alongamento (esguicho vs pingo).
+ * Gera gotas com trajetória em arco (gravidade real), mas contidas numa área pequena
+ * (a moldura do retrato), pra não vazarem pra fora do card. Cada gota guarda o ângulo
+ * de voo, usado depois pra alinhar a "ponta" da lágrima com a direção do movimento.
  */
 function gerarParticulasSangue(qtd) {
   return Array.from({ length: qtd }, (_, i) => {
-    const angulo = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.6;
-    const forca = 40 + Math.random() * 100;
-    const peso = 0.6 + Math.random() * 0.9;
+    const angulo = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.5;
+    const forca = 22 + Math.random() * 46;
+    const peso = 0.6 + Math.random() * 0.8;
+    const xFinal = Math.cos(angulo) * forca;
+    const yFinal = Math.sin(angulo) * forca * 0.4 + 26 + peso * 18;
+    const anguloVisual = (Math.atan2(yFinal, xFinal) * 180) / Math.PI + 90;
     return {
       id: i,
-      xFinal: Math.cos(angulo) * forca,
-      yPico: -18 - Math.random() * 26,
-      yFinal: Math.sin(angulo) * forca * 0.35 + 60 + peso * 40,
-      largura: 4 + Math.random() * 7,
-      altura: 6 + Math.random() * 11,
-      alongamento: 1 + Math.random() * 1.8,
-      rotacao: (Math.random() - 0.5) * 140,
-      atraso: Math.random() * 0.12,
+      xFinal,
+      yPico: -10 - Math.random() * 14,
+      yFinal,
+      largura: 3 + Math.random() * 4,
+      altura: 5 + Math.random() * 7,
+      rotacaoVoo: anguloVisual,
+      atraso: Math.random() * 0.1,
       cor: i,
-      persiste: Math.random() > 0.45,
     };
   });
 }
 
-/** Respingos finos: linhas de sangue que esguicham e "grudam", ficando mais tempo na tela. */
+/** Respingos finos: linhas de sangue que esguicham, contidas na mesma área pequena. */
 function gerarRespingos(qtd) {
   return Array.from({ length: qtd }, (_, i) => {
-    const angulo = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.3;
-    const dist = 50 + Math.random() * 110;
+    const angulo = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.2;
+    const dist = 20 + Math.random() * 46;
     return {
       id: i,
       x: Math.cos(angulo) * dist,
-      y: Math.sin(angulo) * dist * 0.5 + 50,
-      comprimento: 22 + Math.random() * 46,
-      espessura: 1.5 + Math.random() * 2.5,
+      y: Math.sin(angulo) * dist * 0.45 + 18,
+      comprimento: 10 + Math.random() * 20,
+      espessura: 1 + Math.random() * 1.6,
       rotacao: (angulo * 180) / Math.PI + 90,
-      atraso: Math.random() * 0.1,
+      atraso: Math.random() * 0.08,
     };
   });
 }
 
-/** Fumaça espectral: névoa escura que sobe, se dissipa e gira lentamente, ao invés de "explodir". */
+/** Fumaça espectral: névoa curta que sobe e se dissipa dentro da moldura do retrato. */
 function gerarFumaca(qtd) {
   return Array.from({ length: qtd }, (_, i) => ({
     id: i,
-    x: (Math.random() - 0.5) * 90,
-    yFinal: -90 - Math.random() * 110,
-    escala: 1.1 + Math.random() * 2.2,
-    rotacaoFinal: (Math.random() - 0.5) * 60,
-    atraso: Math.random() * 0.25,
-    duracaoExtra: Math.random() * 0.5,
-    blur: 6 + Math.random() * 10,
+    x: (Math.random() - 0.5) * 50,
+    yFinal: -40 - Math.random() * 40,
+    escala: 0.8 + Math.random() * 1.3,
+    rotacaoFinal: (Math.random() - 0.5) * 50,
+    atraso: Math.random() * 0.2,
+    duracaoExtra: Math.random() * 0.4,
+    blur: 4 + Math.random() * 6,
   }));
+}
+
+/** Gera 2-3 blobs orgânicos sobrepostos (bordas irregulares) pra formar uma mancha crível. */
+function gerarSubBlobs() {
+  return Array.from({ length: 2 + Math.floor(Math.random() * 2) }, () => ({
+    dx: (Math.random() - 0.5) * 10,
+    dy: (Math.random() - 0.5) * 6,
+    escalaX: 0.7 + Math.random() * 0.5,
+    escalaY: 0.55 + Math.random() * 0.4,
+    raio: `${40 + Math.random() * 25}% ${60 - Math.random() * 20}% ${50 + Math.random() * 20}% ${
+      50 - Math.random() * 20
+    }% / ${55 + Math.random() * 15}% ${50 + Math.random() * 10}% ${45 - Math.random() * 10}% ${
+      60 - Math.random() * 15
+    }%`,
+  }));
+}
+
+/** Cria uma marca de ferimento fixa, posicionada dentro da moldura do retrato (nunca fora dela). */
+function criarMancha(severidade) {
+  const tamanhoBase = severidade === "abate" ? 30 : severidade === "critico" ? 20 : 12;
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    xPct: 28 + Math.random() * 44,
+    yPct: 42 + Math.random() * 42,
+    tamanho: tamanhoBase,
+    blobs: gerarSubBlobs(),
+  };
 }
 
 function EfeitoImpacto({ material, severidade, onFim }) {
   const cfg = MATERIAL_CONFIG[material] || MATERIAL_CONFIG.CARNE;
   const intensidade = INTENSIDADE[severidade];
   const espectral = material === "ESPECTRAL";
+  const golpeForte = !espectral && (severidade === "critico" || severidade === "abate") && cfg.corSlash;
 
   const gotas = useRef(!espectral ? gerarParticulasSangue(intensidade.particulas) : []).current;
   const respingos = useRef(!espectral ? gerarRespingos(intensidade.respingos) : []).current;
   const fumaca = useRef(espectral ? gerarFumaca(intensidade.particulas) : []).current;
+  const anguloSlash = useRef(-28 + Math.random() * 56).current;
 
   return (
     <motion.div
-      className="absolute inset-0 pointer-events-none overflow-visible z-30"
+      className="absolute inset-0 pointer-events-none overflow-hidden z-30"
       initial={{ opacity: 1 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       onAnimationComplete={onFim}
     >
-      {/* Flash de impacto: mais um "golpe" na tela do que um tingimento parelho */}
+      {/* Micro-flash branco: o "soco" do impacto, bem curto */}
       <motion.div
-        className="absolute inset-0 pointer-events-none"
+        className="absolute inset-0 pointer-events-none mix-blend-overlay"
+        style={{ background: "rgba(255,255,255,0.9)" }}
+        initial={{ opacity: 0.55 }}
+        animate={{ opacity: 0 }}
+        transition={{ duration: 0.1, ease: "easeOut" }}
+      />
+
+      {/* Flash colorido, mais curto e mais integrado (overlay em vez de lavagem plana) */}
+      <motion.div
+        className="absolute inset-0 pointer-events-none mix-blend-overlay"
         style={{
-          background: espectral
-            ? `radial-gradient(circle at 50% 55%, ${cfg.corFlash}, transparent 70%)`
-            : `radial-gradient(circle at 50% 60%, ${cfg.corFlash}, transparent 65%)`,
+          background: `radial-gradient(circle at 50% 55%, ${cfg.corFlash}, transparent 68%)`,
         }}
         initial={{ opacity: intensidade.flash }}
         animate={{ opacity: 0 }}
-        transition={{ duration: intensidade.duracao * (espectral ? 0.9 : 0.45), ease: "easeOut" }}
+        transition={{ duration: intensidade.duracao * (espectral ? 0.8 : 0.35), ease: "easeOut" }}
       />
+
+      {/* Golpe/rasgão: reforça a leitura de "ataque" em vez de só respingo */}
+      {golpeForte && (
+        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <motion.line
+            x1={50 - Math.cos((anguloSlash * Math.PI) / 180) * 46}
+            y1={50 - Math.sin((anguloSlash * Math.PI) / 180) * 30}
+            x2={50 + Math.cos((anguloSlash * Math.PI) / 180) * 46}
+            y2={50 + Math.sin((anguloSlash * Math.PI) / 180) * 30}
+            stroke={cfg.corSlash}
+            strokeWidth={severidade === "abate" ? 2.6 : 1.8}
+            strokeLinecap="round"
+            initial={{ pathLength: 0, opacity: 0.95 }}
+            animate={{ pathLength: 1, opacity: 0 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+          />
+        </svg>
+      )}
 
       {!espectral &&
         gotas.map((g) => (
@@ -164,22 +222,21 @@ function EfeitoImpacto({ material, severidade, onFim }) {
             className="absolute left-1/2 top-1/2"
             style={{
               width: g.largura,
-              height: g.altura * g.alongamento,
-              background: `radial-gradient(circle at 32% 28%, ${cfg.corGlow}, ${
+              height: g.altura,
+              background: `radial-gradient(circle at 34% 26%, ${cfg.corGlow}, ${
                 cfg.corParticula[g.cor % cfg.corParticula.length]
               } 55%, #1a0305 100%)`,
-              borderRadius: "50% 50% 50% 50% / 62% 62% 38% 38%",
+              borderRadius: "58% 58% 58% 8%",
               mixBlendMode: cfg.modoMistura,
-              boxShadow: "0 1px 2px rgba(0,0,0,0.4)",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.35)",
             }}
-            initial={{ x: 0, y: 0, opacity: 0.95, scale: 0.3, rotate: 0, filter: "blur(0px)" }}
+            initial={{ x: 0, y: 0, opacity: 0.95, scale: 0.3, rotate: g.rotacaoVoo }}
             animate={{
-              x: [0, g.xFinal * 0.5, g.xFinal],
+              x: [0, g.xFinal * 0.55, g.xFinal],
               y: [0, g.yPico, g.yFinal],
-              scale: [0.3, 1.05, g.persiste ? 0.92 : 0.75],
-              rotate: g.rotacao,
-              opacity: g.persiste ? [0.95, 1, 0.9] : [0.95, 1, 0],
-              filter: ["blur(0px)", "blur(1.5px)", "blur(0px)"],
+              scale: [0.3, 1, 0.65],
+              rotate: g.rotacaoVoo,
+              opacity: [0.95, 1, 0],
             }}
             transition={{
               duration: intensidade.duracao,
@@ -201,24 +258,14 @@ function EfeitoImpacto({ material, severidade, onFim }) {
               borderRadius: "50% 50% 60% 60% / 20% 20% 80% 80%",
               mixBlendMode: cfg.modoMistura,
             }}
-            initial={{
-              x: 0,
-              y: 0,
-              height: 0,
-              opacity: 0.9,
-              rotate: r.rotacao,
-            }}
+            initial={{ x: 0, y: 0, height: 0, opacity: 0.9, rotate: r.rotacao }}
             animate={{
               x: r.x,
               y: r.y,
-              height: [0, r.comprimento, r.comprimento * 0.85],
-              opacity: [0.9, 0.95, 0.7],
+              height: [0, r.comprimento, r.comprimento * 0.8],
+              opacity: [0.9, 0.9, 0],
             }}
-            transition={{
-              duration: intensidade.duracao * 0.85,
-              delay: r.atraso,
-              ease: "easeOut",
-            }}
+            transition={{ duration: intensidade.duracao * 0.8, delay: r.atraso, ease: "easeOut" }}
           />
         ))}
 
@@ -228,24 +275,20 @@ function EfeitoImpacto({ material, severidade, onFim }) {
             key={`fumaca-${f.id}`}
             className="absolute left-1/2 top-1/2 rounded-full"
             style={{
-              width: 34,
-              height: 34,
-              background: `radial-gradient(circle, ${cfg.corParticula[f.id % cfg.corParticula.length]} 0%, rgba(0,0,0,0.55) 55%, transparent 78%)`,
+              width: 22,
+              height: 22,
+              background: `radial-gradient(circle, ${cfg.corParticula[f.id % cfg.corParticula.length]} 0%, rgba(0,0,0,0.5) 55%, transparent 78%)`,
               filter: `blur(${f.blur}px)`,
             }}
-            initial={{ x: 0, y: 10, opacity: 0.75, scale: 0.5, rotate: 0 }}
+            initial={{ x: 0, y: 6, opacity: 0.7, scale: 0.5, rotate: 0 }}
             animate={{
               x: f.x,
               y: f.yFinal,
-              opacity: [0.75, 0.55, 0],
+              opacity: [0.7, 0.5, 0],
               scale: f.escala,
               rotate: f.rotacaoFinal,
             }}
-            transition={{
-              duration: intensidade.duracao + f.duracaoExtra,
-              delay: f.atraso,
-              ease: "easeOut",
-            }}
+            transition={{ duration: intensidade.duracao + f.duracaoExtra, delay: f.atraso, ease: "easeOut" }}
           />
         ))}
 
@@ -253,37 +296,61 @@ function EfeitoImpacto({ material, severidade, onFim }) {
         <motion.div
           className="absolute left-1/2 top-1/2 rounded-full"
           style={{
-            width: 10,
-            height: 10,
-            background: "radial-gradient(circle, rgba(120,90,160,0.9), transparent 70%)",
+            width: 8,
+            height: 8,
+            background: "radial-gradient(circle, rgba(150,120,190,0.9), transparent 70%)",
             filter: "blur(1px)",
           }}
           initial={{ opacity: 1, scale: 0.4 }}
-          animate={{ opacity: 0, scale: 5 }}
-          transition={{ duration: intensidade.duracao * 0.6, ease: "easeOut" }}
+          animate={{ opacity: 0, scale: 3.5 }}
+          transition={{ duration: intensidade.duracao * 0.55, ease: "easeOut" }}
         />
       )}
     </motion.div>
   );
 }
 
-/** Formas de poça orgânicas: 3 manchas sobrepostas com raios/rotações levemente aleatórios,
- *  geradas uma única vez por monstro pra não "piscar" a cada re-render. */
-function useFormatoPoça(id, ativo) {
-  const cache = useRef({});
-  if (ativo && !cache.current[id]) {
-    cache.current[id] = Array.from({ length: 3 }, () => ({
-      dx: (Math.random() - 0.5) * 30,
-      escalaX: 0.75 + Math.random() * 0.5,
-      escalaY: 0.5 + Math.random() * 0.35,
-      raio: `${40 + Math.random() * 20}% ${60 - Math.random() * 20}% ${50 + Math.random() * 20}% ${
-        50 - Math.random() * 20
-      }% / ${55 + Math.random() * 15}% ${50 + Math.random() * 10}% ${45 - Math.random() * 10}% ${
-        60 - Math.random() * 15
-      }%`,
-    }));
-  }
-  return cache.current[id];
+/**
+ * Marcas de ferimento: ficam DENTRO da moldura do retrato (que já tem overflow-hidden),
+ * nunca vazam pra fora do card. Substituem a antiga "poça" flutuante.
+ */
+function MarcasFerimento({ manchas, cfgMaterial }) {
+  if (!manchas || manchas.length === 0) return null;
+  const cores = cfgMaterial.corMancha;
+  if (!cores) return null;
+
+  return (
+    <div className="absolute inset-0 pointer-events-none z-20">
+      {manchas.map((m) => (
+        <motion.div
+          key={m.id}
+          className="absolute"
+          style={{ left: `${m.xPct}%`, top: `${m.yPct}%`, transform: "translate(-50%, -50%)" }}
+          initial={{ opacity: 0, scale: 0.4 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.35, ease: "easeOut" }}
+        >
+          {m.blobs.map((b, idx) => (
+            <div
+              key={idx}
+              className="absolute"
+              style={{
+                left: b.dx,
+                top: b.dy,
+                width: m.tamanho,
+                height: m.tamanho,
+                transform: `translate(-50%, -50%) scale(${b.escalaX}, ${b.escalaY})`,
+                borderRadius: b.raio,
+                background: cores[0],
+                mixBlendMode: cfgMaterial.tipo === "sangue" ? "multiply" : "normal",
+                opacity: cfgMaterial.tipo === "sangue" ? 0.75 : 0.55,
+              }}
+            />
+          ))}
+        </motion.div>
+      ))}
+    </div>
+  );
 }
 
 export default function MonstroSessao({ idCaso }) {
@@ -303,7 +370,7 @@ export default function MonstroSessao({ idCaso }) {
 
   const [danoInputs, setDanoInputs] = useState({});
   const [efeitosAtivos, setEfeitosAtivos] = useState({});
-  const [poças, setPoças] = useState({});
+  const [manchas, setManchas] = useState({});
   const [tremores, setTremores] = useState({});
 
   const podeGerenciar = hasAuthority("admin::write");
@@ -378,6 +445,9 @@ export default function MonstroSessao({ idCaso }) {
     const novoPv = Math.min(monstro.pvMaximo, Math.max(0, monstro.pv + delta));
     if (novoPv === monstro.pv) return;
     atualizarPv(monstro, novoPv);
+    if (delta > 0 && novoPv >= monstro.pvMaximo) {
+      setManchas((prev) => ({ ...prev, [monstro.id]: [] }));
+    }
   };
 
   const dispararTremor = useCallback((id) => {
@@ -399,9 +469,12 @@ export default function MonstroSessao({ idCaso }) {
 
     setEfeitosAtivos((prev) => ({ ...prev, [monstro.id]: { severidade, key: Date.now() } }));
 
-    if (cfgMaterial.corPoça) {
-      const incremento = severidade === "abate" ? 0.6 : severidade === "critico" ? 0.35 : 0.15;
-      setPoças((prev) => ({ ...prev, [monstro.id]: Math.min(1, (prev[monstro.id] || 0) + incremento) }));
+    if (cfgMaterial.corMancha) {
+      setManchas((prev) => {
+        const atuais = prev[monstro.id] || [];
+        const novaLista = [...atuais, criarMancha(severidade)].slice(-5);
+        return { ...prev, [monstro.id]: novaLista };
+      });
     }
 
     setDanoInputs((prev) => ({ ...prev, [monstro.id]: "" }));
@@ -621,8 +694,7 @@ export default function MonstroSessao({ idCaso }) {
               const critico = !morto && pct <= 25;
               const emBatalha = m.emBatalha;
               const cfgMaterial = MATERIAL_CONFIG[m.material] || MATERIAL_CONFIG.CARNE;
-              const poçaIntensidade = poças[m.id] || 0;
-              const formatoPoça = useFormatoPoça(m.id, poçaIntensidade > 0 && !!cfgMaterial.corPoça);
+              const manchasDoMonstro = manchas[m.id];
 
               const statusLabel = morto ? "Abatido" : critico ? "Crítico" : pct <= 60 ? "Ferido" : "Saudável";
               const statusColor = morto ? "#5b5346" : critico ? "#7A1230" : pct <= 60 ? "#B99A4B" : "#3F8574";
@@ -648,48 +720,6 @@ export default function MonstroSessao({ idCaso }) {
                     transition={{ duration: 0.35 }}
                     className="relative flex flex-col flex-1"
                   >
-                    {cfgMaterial.corPoça && poçaIntensidade > 0 && formatoPoça && (
-                      <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-full h-10 pointer-events-none z-0 overflow-visible">
-                        {formatoPoça.map((blob, idx) => (
-                          <motion.div
-                            key={idx}
-                            className="absolute bottom-0"
-                            style={{
-                              left: `calc(50% + ${blob.dx}px)`,
-                              transform: `translateX(-50%) scale(${blob.escalaX}, ${blob.escalaY})`,
-                              borderRadius: blob.raio,
-                              background: `radial-gradient(ellipse at center, ${cfgMaterial.corPoça[0]}, ${cfgMaterial.corPoça[1]} 60%, transparent 90%)`,
-                              mixBlendMode: "multiply",
-                              filter: "blur(1.5px)",
-                            }}
-                            animate={{
-                              width: 50 + poçaIntensidade * 150,
-                              height: 16 + poçaIntensidade * 28,
-                              opacity: 0.5 + poçaIntensidade * 0.4,
-                            }}
-                            transition={{ duration: 0.7, ease: "easeOut" }}
-                          />
-                        ))}
-                      </div>
-                    )}
-
-                    <AnimatePresence>
-                      {efeitosAtivos[m.id] && (
-                        <EfeitoImpacto
-                          key={efeitosAtivos[m.id].key}
-                          material={m.material}
-                          severidade={efeitosAtivos[m.id].severidade}
-                          onFim={() =>
-                            setEfeitosAtivos((prev) => {
-                              const novo = { ...prev };
-                              delete novo[m.id];
-                              return novo;
-                            })
-                          }
-                        />
-                      )}
-                    </AnimatePresence>
-
                     {emBatalha && !morto && (
                       <div className="absolute top-0 right-0 bg-[#7A1230] text-[#EAE0C4] font-mono-ieji text-[9px] uppercase tracking-widest px-2 py-1 flex items-center gap-1 z-10">
                         <Swords className="w-3 h-3" /> Em batalha
@@ -707,12 +737,34 @@ export default function MonstroSessao({ idCaso }) {
                       </button>
                     )}
 
+                    {/* Moldura do retrato: overflow-hidden já existente agora também contém
+                        os efeitos de impacto e as marcas de ferimento, então nada vaza pra fora do card. */}
                     <div className="bg-[#201A1E] relative rounded-t-sm overflow-hidden">
                       {m.imagemUrl && (
                         <div className="h-28 sm:h-32 flex items-end justify-center overflow-hidden pt-2">
                           <RetratoElegante imagemUrl={m.imagemUrl} className="h-32 sm:h-36 w-auto max-w-[85%]" />
                         </div>
                       )}
+
+                      <MarcasFerimento manchas={manchasDoMonstro} cfgMaterial={cfgMaterial} />
+
+                      <AnimatePresence>
+                        {efeitosAtivos[m.id] && (
+                          <EfeitoImpacto
+                            key={efeitosAtivos[m.id].key}
+                            material={m.material}
+                            severidade={efeitosAtivos[m.id].severidade}
+                            onFim={() =>
+                              setEfeitosAtivos((prev) => {
+                                const novo = { ...prev };
+                                delete novo[m.id];
+                                return novo;
+                              })
+                            }
+                          />
+                        )}
+                      </AnimatePresence>
+
                       <div className="px-4 py-3 flex items-center justify-between gap-2 relative">
                         <h3 className="font-display font-bold text-base sm:text-lg text-[#EAE0C4] leading-tight truncate">
                           {m.nome}
