@@ -100,7 +100,7 @@ export default function UsuariosSessao({ idCaso }) {
                   <ChevronDown className="w-3 h-3 opacity-60" />
                 </button>
 
-                {u.role == "ADMIN" && (
+                {u.role !== "ADMIN" && (
                   <button
                     type="button"
                     onClick={() => handleExcluirUsuario(u)}
