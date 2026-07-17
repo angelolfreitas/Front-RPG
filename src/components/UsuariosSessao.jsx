@@ -22,10 +22,10 @@ export default function UsuariosSessao({ idCaso }) {
   const fetchUsuarios = async () => {
     setCarregando(true);
     try {
-      const response = await api.get(`/casos/${idCaso}/usuarios`);
+      const response = await api.get(`/usuarios`);
       setUsuarios(response.data);
     } catch (error) {
-      console.error("Erro ao buscar usuários do caso:", error);
+      console.error("Erro ao buscar usuários do sistema:", error);
     } finally {
       setCarregando(false);
     }
