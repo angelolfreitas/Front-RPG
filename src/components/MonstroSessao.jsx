@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Skull, Minus, Plus, ShieldAlert, X, Feather, Trash2, Swords, Save, SkullIcon
+  Skull, Minus, Plus, ShieldAlert, X, Feather, Trash2, Swords, Save, SkullIcon, Droplet
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -20,9 +20,106 @@ const EMPTY_EDIT = {
   comportamento: "",
   fraquezas: "",
   imagemUrl: "",
+  material: "CARNE",
   emBatalha: false,
   conhecido: false,
 };
+
+const MATERIAL_OPTIONS = ["CARNE", "ESPECTRAL"];
+
+/**
+ * Paleta/forma do efeito de impacto por material.
+ * Adicione novas entradas aqui quando quiser mais materiais (ex.: METAL, PLANTA).
+ */
+const MATERIAL_CONFIG = {
+  CARNE: { label: "Carne", corBase: ["#7A1230", "#4A0A1D", "#5b0f26"], corPoça: "#3D0812" },
+  ESPECTRAL: { label: "Espectral", corBase: ["#3F8574", "#274E45", "#6fb3a0"], corPoça: null },
+};
+
+function classificarSeveridade(percentualPerdido, vidaChegouAZero) {
+  if (vidaChegouAZero) return "abate";
+  if (percentualPerdido >= 0.3) return "critico";
+  return "normal";
+}
+
+const INTENSIDADE = {
+  normal: { particulas: 10, shake: 3, flash: 0.15, duracao: 0.5 },
+  critico: { particulas: 22, shake: 7, flash: 0.32, duracao: 0.7 },
+  abate: { particulas: 38, shake: 11, flash: 0.5, duracao: 1.1 },
+};
+
+function gerarParticulas(qtd) {
+  return Array.from({ length: qtd }, (_, i) => {
+    const angulo = Math.random() * Math.PI * 2;
+    const distancia = 30 + Math.random() * 90;
+    return {
+      id: i,
+      x: Math.cos(angulo) * distancia,
+      y: Math.sin(angulo) * distancia * 0.6 + Math.random() * 40,
+      escala: 0.4 + Math.random() * 1.4,
+      rotacao: Math.random() * 360,
+      atraso: Math.random() * 0.15,
+    };
+  });
+}
+
+function EfeitoImpacto({ material, severidade, onFim }) {
+  const cfg = MATERIAL_CONFIG[material] || MATERIAL_CONFIG.CARNE;
+  const intensidade = INTENSIDADE[severidade];
+  const particulas = useRef(gerarParticulas(intensidade.particulas)).current;
+  const espectral = material === "ESPECTRAL";
+
+  return (
+    <motion.div
+      className="absolute inset-0 pointer-events-none overflow-visible z-30"
+      initial={{ opacity: 1 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onAnimationComplete={onFim}
+    >
+      <motion.div
+        className="fixed inset-0 pointer-events-none z-40"
+        style={{ backgroundColor: espectral ? "#3F857440" : "#7A123055" }}
+        initial={{ opacity: intensidade.flash }}
+        animate={{ opacity: 0 }}
+        transition={{ duration: intensidade.duracao * 0.6 }}
+      />
+
+      {particulas.map((p) => (
+        <motion.div
+          key={p.id}
+          className="absolute left-1/2 top-1/2"
+          style={{
+            width: espectral ? 18 : 10 + p.escala * 6,
+            height: espectral ? 18 : 8 + p.escala * 5,
+            backgroundColor: cfg.corBase[p.id % cfg.corBase.length],
+            borderRadius: espectral ? "50%" : "40% 60% 55% 45% / 50% 45% 55% 50%",
+            filter: espectral ? "blur(6px)" : "none",
+          }}
+          initial={{ x: 0, y: 0, opacity: espectral ? 0.7 : 1, scale: 0.3, rotate: 0 }}
+          animate={
+            espectral
+              ? { x: p.x * 0.5, y: p.y - 60, opacity: 0, scale: p.escala * 1.8 }
+              : { x: p.x, y: p.y, opacity: [1, 1, 0.9, 0], scale: p.escala, rotate: p.rotacao }
+          }
+          transition={{ duration: intensidade.duracao, delay: p.atraso, ease: [0.19, 1, 0.22, 1] }}
+        />
+      ))}
+
+      {!espectral &&
+        particulas.slice(0, Math.ceil(intensidade.particulas / 3)).map((p) => (
+          <motion.div
+            key={`fio-${p.id}`}
+            className="absolute left-1/2 top-1/2 rounded-full"
+            style={{ width: 3 + Math.random() * 3, backgroundColor: cfg.corBase[0] }}
+            initial={{ x: p.x * 0.6, y: p.y * 0.5, height: 0, opacity: 0.9 }}
+            animate={{ height: 40 + Math.random() * 50, opacity: [0.9, 0.9, 0] }}
+            transition={{ duration: intensidade.duracao * 1.4, delay: p.atraso + 0.1, ease: "easeIn" }}
+          />
+        ))}
+    </motion.div>
+  );
+}
 
 export default function MonstroSessao({ idCaso }) {
   const stompClient = useStompClient(idCaso);
@@ -31,13 +128,18 @@ export default function MonstroSessao({ idCaso }) {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const [detalheAberto, setDetalheAberto] = useState(null); // monstro selecionado (mestre)
+  const [detalheAberto, setDetalheAberto] = useState(null);
   const [editForm, setEditForm] = useState(EMPTY_EDIT);
   const [isSalvandoDetalhe, setIsSalvandoDetalhe] = useState(false);
   const [isDeletando, setIsDeletando] = useState(false);
   const [isIniciandoBatalha, setIsIniciandoBatalha] = useState(false);
 
-  const [avisoBatalha, setAvisoBatalha] = useState(null); // nome do monstro pro banner
+  const [avisoBatalha, setAvisoBatalha] = useState(null);
+
+  const [danoInputs, setDanoInputs] = useState({});
+  const [efeitosAtivos, setEfeitosAtivos] = useState({});
+  const [poças, setPoças] = useState({});
+  const [tremores, setTremores] = useState({});
 
   const podeGerenciar = hasAuthority("admin::write");
 
@@ -90,10 +192,7 @@ export default function MonstroSessao({ idCaso }) {
     }
   }, [idCaso, stompClient]);
 
-  const alterarVida = async (monstro, delta) => {
-    const novoPv = Math.min(monstro.pvMaximo, Math.max(0, monstro.pv + delta));
-    if (novoPv === monstro.pv) return;
-
+  const atualizarPv = async (monstro, novoPv) => {
     setMonstros((prev) => prev.map((m) => (m.id === monstro.id ? { ...m, pv: novoPv } : m)));
 
     if (stompClient?.connected) {
@@ -102,7 +201,6 @@ export default function MonstroSessao({ idCaso }) {
         body: JSON.stringify({ id: monstro.id, pv: novoPv }),
       });
     } else {
-      // Sem WebSocket conectado, cai pro PATCH via REST
       try {
         await api.patch(`/monstro/${monstro.id}`, { pv: novoPv });
       } catch (error) {
@@ -111,15 +209,49 @@ export default function MonstroSessao({ idCaso }) {
     }
   };
 
+  const alterarVida = (monstro, delta) => {
+    const novoPv = Math.min(monstro.pvMaximo, Math.max(0, monstro.pv + delta));
+    if (novoPv === monstro.pv) return;
+    atualizarPv(monstro, novoPv);
+  };
+
+  const dispararTremor = useCallback((id) => {
+    setTremores((prev) => ({ ...prev, [id]: true }));
+    setTimeout(() => setTremores((prev) => ({ ...prev, [id]: false })), 350);
+  }, []);
+
+  const aplicarDanoEmMassa = (monstro) => {
+    const dano = parseInt(danoInputs[monstro.id], 10);
+    if (!dano || dano <= 0) return;
+
+    const novoPv = Math.max(0, monstro.pv - dano);
+    const percentualPerdido = dano / (monstro.pvMaximo || monstro.pv || 1);
+    const severidade = classificarSeveridade(percentualPerdido, novoPv === 0);
+    const cfgMaterial = MATERIAL_CONFIG[monstro.material] || MATERIAL_CONFIG.CARNE;
+
+    atualizarPv(monstro, novoPv);
+    dispararTremor(monstro.id);
+
+    setEfeitosAtivos((prev) => ({ ...prev, [monstro.id]: { severidade, key: Date.now() } }));
+
+    if (cfgMaterial.corPoça) {
+      const incremento = severidade === "abate" ? 0.6 : severidade === "critico" ? 0.35 : 0.15;
+      setPoças((prev) => ({ ...prev, [monstro.id]: Math.min(1, (prev[monstro.id] || 0) + incremento) }));
+    }
+
+    setDanoInputs((prev) => ({ ...prev, [monstro.id]: "" }));
+  };
+
   const handleCreateMonstro = async (e) => {
     e.preventDefault();
     const form = e.target;
     const nome = form.elements.namedItem("nome").value;
     const pvMaximo = Number(form.elements.namedItem("pvMaximo").value);
+    const material = form.elements.namedItem("material").value;
 
     setIsSaving(true);
     try {
-      const response = await api.post("/monstro", { nome, pv: pvMaximo, pvMaximo });
+      const response = await api.post("/monstro", { nome, pv: pvMaximo, pvMaximo, material });
       setMonstros((prev) => [...prev, response.data]);
       setIsCreateOpen(false);
       form.reset();
@@ -141,6 +273,7 @@ export default function MonstroSessao({ idCaso }) {
       comportamento: monstro.comportamento || "",
       fraquezas: monstro.fraquezas || "",
       imagemUrl: monstro.imagemUrl || "",
+      material: monstro.material || "CARNE",
       emBatalha: monstro.emBatalha ?? false,
       conhecido: monstro.conhecido ?? false,
     });
@@ -251,7 +384,6 @@ export default function MonstroSessao({ idCaso }) {
 
   return (
     <div>
-      {/* AVISO DE BATALHA — visível pra todo mundo na sessão */}
       <AnimatePresence>
         {avisoBatalha && (
           <motion.div
@@ -295,7 +427,6 @@ export default function MonstroSessao({ idCaso }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
           <AnimatePresence>
             {monstrosOrdenados.map((m) => {
-              // Ameaça não identificada — jogador que ainda não encontrou o monstro
               if (!podeGerenciar && !m.conhecido) {
                 return (
                   <motion.div
@@ -324,6 +455,8 @@ export default function MonstroSessao({ idCaso }) {
               const morto = m.pv <= 0;
               const critico = !morto && pct <= 25;
               const emBatalha = m.emBatalha;
+              const cfgMaterial = MATERIAL_CONFIG[m.material] || MATERIAL_CONFIG.CARNE;
+              const poçaIntensidade = poças[m.id] || 0;
 
               const statusLabel = morto ? "Abatido" : critico ? "Crítico" : pct <= 60 ? "Ferido" : "Saudável";
               const statusColor = morto ? "#5b5346" : critico ? "#7A1230" : pct <= 60 ? "#B99A4B" : "#3F8574";
@@ -336,120 +469,192 @@ export default function MonstroSessao({ idCaso }) {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95 }}
                   onClick={() => podeGerenciar && abrirDetalhe(m)}
-                  className={`relative bg-[#EAE0C4] border-4 border-[#0B0A0D] rounded-sm overflow-hidden shadow-[6px_6px_0px_0px_#7A1230] flex flex-col transition-all ${
+                  className={`relative bg-[#EAE0C4] border-4 border-[#0B0A0D] rounded-sm shadow-[6px_6px_0px_0px_#7A1230] flex flex-col transition-all ${
                     podeGerenciar ? "cursor-pointer hover:-translate-y-0.5" : ""
                   } ${morto ? "grayscale" : ""}`}
                 >
-                  {emBatalha && !morto && (
-                    <div className="absolute top-0 right-0 bg-[#7A1230] text-[#EAE0C4] font-mono-ieji text-[9px] uppercase tracking-widest px-2 py-1 flex items-center gap-1 z-10">
-                      <Swords className="w-3 h-3" /> Em batalha
-                    </div>
-                  )}
+                  <motion.div
+                    animate={
+                      tremores[m.id]
+                        ? { x: [0, -6, 6, -4, 4, -2, 0], y: [0, 3, -3, 2, -2, 0] }
+                        : { x: 0, y: 0 }
+                    }
+                    transition={{ duration: 0.35 }}
+                    className="relative flex flex-col flex-1"
+                  >
+                    {cfgMaterial.corPoça && poçaIntensidade > 0 && (
+                      <motion.div
+                        className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-[50%] pointer-events-none z-0"
+                        style={{ backgroundColor: cfgMaterial.corPoça, filter: "blur(2px)" }}
+                        animate={{
+                          width: 60 + poçaIntensidade * 160,
+                          height: 14 + poçaIntensidade * 30,
+                          opacity: 0.55 + poçaIntensidade * 0.35,
+                        }}
+                        transition={{ duration: 0.6, ease: "easeOut" }}
+                      />
+                    )}
 
-                  {podeGerenciar && (
-                    <button
-                      type="button"
-                      onClick={(e) => handleDeletarRapido(e, m)}
-                      className="absolute top-2 left-2 z-10 w-7 h-7 rounded-sm bg-[#0B0A0D]/70 border border-[#7A1230] text-[#7A1230] hover:bg-[#7A1230] hover:text-[#EAE0C4] flex items-center justify-center transition-colors"
-                      title="Deletar monstro"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+                    <AnimatePresence>
+                      {efeitosAtivos[m.id] && (
+                        <EfeitoImpacto
+                          key={efeitosAtivos[m.id].key}
+                          material={m.material}
+                          severidade={efeitosAtivos[m.id].severidade}
+                          onFim={() =>
+                            setEfeitosAtivos((prev) => {
+                              const novo = { ...prev };
+                              delete novo[m.id];
+                              return novo;
+                            })
+                          }
+                        />
+                      )}
+                    </AnimatePresence>
 
-                  <div className="bg-[#201A1E] relative">
-                    {m.imagemUrl && (
-                      <div className="h-28 sm:h-32 flex items-end justify-center overflow-hidden pt-2">
-                        <RetratoElegante imagemUrl={m.imagemUrl} className="h-32 sm:h-36 w-auto max-w-[85%]" />
+                    {emBatalha && !morto && (
+                      <div className="absolute top-0 right-0 bg-[#7A1230] text-[#EAE0C4] font-mono-ieji text-[9px] uppercase tracking-widest px-2 py-1 flex items-center gap-1 z-10">
+                        <Swords className="w-3 h-3" /> Em batalha
                       </div>
                     )}
-                    <div className="px-4 py-3 flex items-center justify-between gap-2 relative">
-                      <h3 className="font-display font-bold text-base sm:text-lg text-[#EAE0C4] leading-tight truncate">
-                        {m.nome}
-                      </h3>
-                      {!m.imagemUrl && (
-                        <div className="w-8 h-8 rounded-full bg-[#7A1230]/20 border border-[#7A1230] flex items-center justify-center shrink-0">
-                          <Skull className="w-4 h-4 text-[#7A1230]" />
+
+                    {podeGerenciar && (
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeletarRapido(e, m)}
+                        className="absolute top-2 left-2 z-10 w-7 h-7 rounded-sm bg-[#0B0A0D]/70 border border-[#7A1230] text-[#7A1230] hover:bg-[#7A1230] hover:text-[#EAE0C4] flex items-center justify-center transition-colors"
+                        title="Deletar monstro"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+
+                    <div className="bg-[#201A1E] relative rounded-t-sm overflow-hidden">
+                      {m.imagemUrl && (
+                        <div className="h-28 sm:h-32 flex items-end justify-center overflow-hidden pt-2">
+                          <RetratoElegante imagemUrl={m.imagemUrl} className="h-32 sm:h-36 w-auto max-w-[85%]" />
+                        </div>
+                      )}
+                      <div className="px-4 py-3 flex items-center justify-between gap-2 relative">
+                        <h3 className="font-display font-bold text-base sm:text-lg text-[#EAE0C4] leading-tight truncate">
+                          {m.nome}
+                        </h3>
+                        {!m.imagemUrl && (
+                          <div className="w-8 h-8 rounded-full bg-[#7A1230]/20 border border-[#7A1230] flex items-center justify-center shrink-0">
+                            <Skull className="w-4 h-4 text-[#7A1230]" />
+                          </div>
+                        )}
+                      </div>
+                      {podeGerenciar && (
+                        <span className="absolute bottom-1.5 right-3 font-mono-ieji text-[8px] uppercase tracking-widest text-[#EAE0C4]/50 flex items-center gap-1">
+                          <Droplet className="w-2.5 h-2.5" /> {cfgMaterial.label}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="p-5 flex-1 flex flex-col">
+                      <div className="mb-4">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="font-mono-ieji text-[10px] uppercase tracking-widest text-[#201A1E] flex items-center gap-1.5">
+                            {critico && <ShieldAlert className="w-3.5 h-3.5 text-[#7A1230]" />}
+                            {podeGerenciar ? "Pontos de vida" : "Condição"}
+                          </span>
+                          {podeGerenciar ? (
+                            <span className="font-mono-ieji text-xs font-semibold text-[#201A1E]">
+                              {m.pv} / {m.pvMaximo}
+                            </span>
+                          ) : (
+                            <span
+                              className="font-mono-ieji text-[10px] font-semibold uppercase"
+                              style={{ color: statusColor }}
+                            >
+                              {statusLabel}
+                            </span>
+                          )}
+                        </div>
+                        <div className="h-3 w-full bg-[#0B0A0D]/10 rounded-sm border border-[#0B0A0D] overflow-hidden">
+                          <div
+                            className="h-full transition-all duration-500 ease-out"
+                            style={{ width: `${pct}%`, backgroundColor: statusColor }}
+                          />
+                        </div>
+                      </div>
+
+                      {podeGerenciar && (
+                        <div
+                          className="mt-auto flex items-center justify-between pt-3 border-t border-dashed border-[#B99A4B]"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <span className="font-mono-ieji text-[10px] uppercase text-[#5b5346]">Ajustar</span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => alterarVida(m, -1)}
+                              className="w-10 h-10 sm:w-8 sm:h-8 border-2 border-[#0B0A0D] rounded-sm hover:bg-[#7A1230] hover:text-[#EAE0C4] hover:border-[#7A1230] flex items-center justify-center transition-colors"
+                              title="Diminuir 1 PV"
+                            >
+                              <Minus className="w-4 h-4" />
+                            </button>
+                            <span className="font-display font-bold text-xl w-6 text-center text-[#7A1230]">
+                              {m.pv}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => alterarVida(m, 1)}
+                              className="w-10 h-10 sm:w-8 sm:h-8 border-2 border-[#0B0A0D] rounded-sm hover:bg-[#3F8574] hover:text-[#EAE0C4] hover:border-[#3F8574] flex items-center justify-center transition-colors"
+                              title="Aumentar 1 PV"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {podeGerenciar && !morto && (
+                        <div
+                          className="mt-3 flex items-center gap-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="number"
+                            min="1"
+                            value={danoInputs[m.id] || ""}
+                            onChange={(e) =>
+                              setDanoInputs((prev) => ({ ...prev, [m.id]: e.target.value }))
+                            }
+                            onKeyDown={(e) => e.key === "Enter" && aplicarDanoEmMassa(m)}
+                            placeholder="Dano"
+                            className="w-20 bg-[#F5EFDD] text-[#201A1E] font-mono-ieji text-xs px-2 py-1.5 rounded-sm border-2 border-[#0B0A0D] focus:outline-none focus:border-[#7A1230]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => aplicarDanoEmMassa(m)}
+                            disabled={!danoInputs[m.id]}
+                            className="flex-1 bg-[#7A1230] text-[#EAE0C4] font-mono-ieji text-[10px] uppercase tracking-wider py-1.5 rounded-sm border-2 border-[#0B0A0D] hover:bg-[#5b0f26] transition-colors disabled:opacity-50"
+                          >
+                            Aplicar dano
+                          </button>
+                        </div>
+                      )}
+
+                      {podeGerenciar && (
+                        <div onClick={(e) => e.stopPropagation()} className="mt-3">
+                          <Button
+                            type="button"
+                            onClick={() => (emBatalha ? encerrarBatalhaCard(m) : iniciarBatalhaCard(m))}
+                            disabled={!stompClient?.connected}
+                            className={`w-full font-mono-ieji text-xs gap-2 border-2 border-[#0B0A0D] ${
+                              emBatalha
+                                ? "bg-[#3F8574] text-[#EAE0C4] hover:bg-[#EAE0C4] hover:text-[#201A1E]"
+                                : "bg-[#7A1230] text-[#EAE0C4] hover:bg-[#EAE0C4] hover:text-[#201A1E]"
+                            }`}
+                          >
+                            <Swords className="w-4 h-4" /> {emBatalha ? "ENCERRAR BATALHA" : "INICIAR BATALHA"}
+                          </Button>
                         </div>
                       )}
                     </div>
-                  </div>
-
-                  <div className="p-5 flex-1 flex flex-col">
-                    <div className="mb-4">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="font-mono-ieji text-[10px] uppercase tracking-widest text-[#201A1E] flex items-center gap-1.5">
-                          {critico && <ShieldAlert className="w-3.5 h-3.5 text-[#7A1230]" />}
-                          {podeGerenciar ? "Pontos de vida" : "Condição"}
-                        </span>
-                        {podeGerenciar ? (
-                          <span className="font-mono-ieji text-xs font-semibold text-[#201A1E]">
-                            {m.pv} / {m.pvMaximo}
-                          </span>
-                        ) : (
-                          <span
-                            className="font-mono-ieji text-[10px] font-semibold uppercase"
-                            style={{ color: statusColor }}
-                          >
-                            {statusLabel}
-                          </span>
-                        )}
-                      </div>
-                      <div className="h-3 w-full bg-[#0B0A0D]/10 rounded-sm border border-[#0B0A0D] overflow-hidden">
-                        <div
-                          className="h-full transition-all duration-500 ease-out"
-                          style={{ width: `${podeGerenciar ? pct : pct}%`, backgroundColor: statusColor }}
-                        />
-                      </div>
-                    </div>
-
-                    {podeGerenciar && (
-                      <div
-                        className="mt-auto flex items-center justify-between pt-3 border-t border-dashed border-[#B99A4B]"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <span className="font-mono-ieji text-[10px] uppercase text-[#5b5346]">Ajustar</span>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => alterarVida(m, -1)}
-                            className="w-10 h-10 sm:w-8 sm:h-8 border-2 border-[#0B0A0D] rounded-sm hover:bg-[#7A1230] hover:text-[#EAE0C4] hover:border-[#7A1230] flex items-center justify-center transition-colors"
-                            title="Diminuir 1 PV"
-                          >
-                            <Minus className="w-4 h-4" />
-                          </button>
-                          <span className="font-display font-bold text-xl w-6 text-center text-[#7A1230]">
-                            {m.pv}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => alterarVida(m, 1)}
-                            className="w-10 h-10 sm:w-8 sm:h-8 border-2 border-[#0B0A0D] rounded-sm hover:bg-[#3F8574] hover:text-[#EAE0C4] hover:border-[#3F8574] flex items-center justify-center transition-colors"
-                            title="Aumentar 1 PV"
-                          >
-                            <Plus className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {podeGerenciar && (
-                      <div onClick={(e) => e.stopPropagation()} className="mt-3">
-                        <Button
-                          type="button"
-                          onClick={() => (emBatalha ? encerrarBatalhaCard(m) : iniciarBatalhaCard(m))}
-                          disabled={!stompClient?.connected}
-                          className={`w-full font-mono-ieji text-xs gap-2 border-2 border-[#0B0A0D] ${
-                            emBatalha
-                              ? "bg-[#3F8574] text-[#EAE0C4] hover:bg-[#EAE0C4] hover:text-[#201A1E]"
-                              : "bg-[#7A1230] text-[#EAE0C4] hover:bg-[#EAE0C4] hover:text-[#201A1E]"
-                          }`}
-                        >
-                          <Swords className="w-4 h-4" /> {emBatalha ? "ENCERRAR BATALHA" : "INICIAR BATALHA"}
-                        </Button>
-                      </div>
-                    )}
-                  </div>
+                  </motion.div>
                 </motion.div>
               );
             })}
@@ -457,7 +662,6 @@ export default function MonstroSessao({ idCaso }) {
         </div>
       )}
 
-      {/* MODAL: NOVO MONSTRO */}
       <AnimatePresence>
         {isCreateOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -503,6 +707,23 @@ export default function MonstroSessao({ idCaso }) {
                     className="w-full bg-[#F5EFDD] border-2 border-[#0B0A0D] rounded-sm p-2.5 font-mono-ieji text-sm"
                   />
                 </div>
+                <div className="space-y-1">
+                  <Label className="font-mono-ieji text-[10px] uppercase">Material</Label>
+                  <select
+                    name="material"
+                    defaultValue="CARNE"
+                    className="w-full bg-[#F5EFDD] border-2 border-[#0B0A0D] rounded-sm p-2.5 font-mono-ieji text-sm"
+                  >
+                    {MATERIAL_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {MATERIAL_CONFIG[opt].label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="font-mono-ieji text-[9px] text-[#5b5346]">
+                    Define o efeito visual quando o monstro leva dano.
+                  </p>
+                </div>
                 <p className="font-mono-ieji text-[10px] text-[#5b5346]">
                   Sanidade, ataques, comportamento e fraquezas podem ser preenchidos depois, na ficha completa.
                 </p>
@@ -528,7 +749,6 @@ export default function MonstroSessao({ idCaso }) {
         )}
       </AnimatePresence>
 
-      {/* MODAL: FICHA COMPLETA DO MONSTRO (só mestre) */}
       <AnimatePresence>
         {detalheAberto && podeGerenciar && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -545,7 +765,6 @@ export default function MonstroSessao({ idCaso }) {
               exit={{ scale: 0.9, opacity: 0 }}
               className="relative bg-[#EAE0C4] border-4 border-[#0B0A0D] rounded-sm p-6 shadow-[8px_8px_0px_0px_#7A1230] w-full max-w-lg z-10 max-h-[90vh] overflow-y-auto"
             >
-              {/* ANIMAÇÃO DE MORTE */}
               <AnimatePresence>
                 {Number(editForm.pv) <= 0 && (
                   <motion.div
@@ -665,6 +884,21 @@ export default function MonstroSessao({ idCaso }) {
                       className="w-full bg-[#F5EFDD] border-2 border-[#0B0A0D] rounded-sm p-2.5 font-mono-ieji text-sm text-center"
                     />
                   </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="font-mono-ieji text-[10px] uppercase">Material</Label>
+                  <select
+                    value={editForm.material}
+                    onChange={(e) => setEditForm((f) => ({ ...f, material: e.target.value }))}
+                    className="w-full bg-[#F5EFDD] border-2 border-[#0B0A0D] rounded-sm p-2.5 font-mono-ieji text-sm"
+                  >
+                    {MATERIAL_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {MATERIAL_CONFIG[opt].label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="space-y-1">
