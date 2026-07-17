@@ -109,7 +109,7 @@ export default function ChatSessao({ idCaso }) {
         body: JSON.stringify({
             idCaso: Number(idCaso),
             conteudo: novaMensagem,
-            autorId: Number(autorId), // Mudei para autorId (em PT) caso o backend exija!
+            authorId: Number(autorId),
             personagemId: personagemId ? Number(personagemId) : null,
         })
       });
