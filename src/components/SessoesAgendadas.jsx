@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { CalendarPlus, CalendarClock, X } from "lucide-react";
+import { CalendarPlus, CalendarClock, X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { hasAuthority } from "@/utils/auth";
@@ -10,6 +10,7 @@ export default function SessoesAgendadas({ idCaso }) {
   const [sessoes, setSessoes] = useState([]);
   const [modalAberto, setModalAberto] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [cancelandoId, setCancelandoId] = useState(null);
   const podeMarcar = hasAuthority("manager::write") || hasAuthority("admin::write");
 
   const fetchSessoes = async () => {
@@ -50,6 +51,20 @@ export default function SessoesAgendadas({ idCaso }) {
     }
   };
 
+  const handleCancelarSessao = async (sessao) => {
+    if (!window.confirm("Desmarcar esta sessão? Os agentes serão notificados por e-mail que ela foi cancelada.")) return;
+    setCancelandoId(sessao.id);
+    try {
+      await api.delete(`/casos/${idCaso}/sessoes/${sessao.id}`);
+      setSessoes((prev) => prev.filter((s) => s.id !== sessao.id));
+    } catch (error) {
+      console.error("Erro ao cancelar sessão:", error);
+      alert("Não foi possível cancelar a sessão.");
+    } finally {
+      setCancelandoId(null);
+    }
+  };
+
   const formatarData = (iso) =>
     new Date(iso).toLocaleString("pt-BR", { dateStyle: "medium", timeStyle: "short" });
 
@@ -76,10 +91,23 @@ export default function SessoesAgendadas({ idCaso }) {
       ) : (
         <ul className="space-y-2">
           {sessoes.map((s) => (
-            <li key={s.id} className="bg-[#EAE0C4] border-2 border-[#0B0A0D] rounded-sm p-2.5">
-              <span className="font-mono-ieji text-[10px] text-[#7A1230] block mb-1">
-                {formatarData(s.dataSessao)}
-              </span>
+            <li key={s.id} className="bg-[#EAE0C4] border-2 border-[#0B0A0D] rounded-sm p-2.5 relative">
+              <div className="flex items-start justify-between gap-2">
+                <span className="font-mono-ieji text-[10px] text-[#7A1230] block mb-1">
+                  {formatarData(s.dataSessao)}
+                </span>
+                {podeMarcar && (
+                  <button
+                    type="button"
+                    onClick={() => handleCancelarSessao(s)}
+                    disabled={cancelandoId === s.id}
+                    title="Desmarcar sessão"
+                    className="shrink-0 w-6 h-6 rounded-sm border border-[#7A1230]/50 text-[#7A1230] hover:bg-[#7A1230] hover:text-[#EAE0C4] flex items-center justify-center transition-colors disabled:opacity-50"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
               <p className="font-body text-sm text-[#201A1E] whitespace-pre-wrap">{s.conteudo}</p>
             </li>
           ))}

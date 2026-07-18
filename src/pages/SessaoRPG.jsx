@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Skull, Users, X } from "lucide-react";
 import ChatSessao from "@/components/ChatSessao.jsx";
 import UsuariosSessao from "@/components/UsuariosSessao";
 import SessoesAgendadas from "@/components/SessoesAgendadas";
+import { api } from "@/services/api";
 
 const FontImports = () => (
   <style>{`
@@ -17,6 +18,13 @@ const FontImports = () => (
 const SessaoRPG = () => {
   const { id } = useParams();
   const [usuariosAbertos, setUsuariosAbertos] = useState(false);
+
+  useEffect(() => {
+    if (!id || id === "undefined") return;
+    api.post(`/casos/${id}/entrar`).catch((error) => {
+      console.error("Erro ao registrar entrada na sessão:", error);
+    });
+  }, [id]);
 
   if (!id || id === "undefined") {
     return <div className="text-[#EAE0C4] flex items-center justify-center h-screen font-display">Sincronizando dossiê...</div>;
