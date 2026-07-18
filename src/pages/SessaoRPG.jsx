@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Skull, Users, X } from "lucide-react";
 import ChatSessao from "@/components/ChatSessao.jsx";
 import UsuariosSessao from "@/components/UsuariosSessao";
+import SessoesAgendadas from "@/components/SessoesAgendadas";
 
 const FontImports = () => (
   <style>{`
@@ -53,7 +54,8 @@ const SessaoRPG = () => {
 
       <main className="max-w-6xl mx-auto px-4 md:px-8 py-8 relative z-10 flex flex-col sm:flex-row gap-6">
         {/* Desktop: sidebar fixa ao lado do chat */}
-        <div className="hidden sm:block sm:w-64 shrink-0">
+        <div className="hidden sm:block sm:w-64 shrink-0 space-y-4">
+          <SessoesAgendadas idCaso={id} />
           <UsuariosSessao idCaso={id} />
         </div>
 
@@ -68,7 +70,10 @@ const SessaoRPG = () => {
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              <UsuariosSessao idCaso={id} />
+              <div className="space-y-4">
+                <SessoesAgendadas idCaso={id} />
+                <UsuariosSessao idCaso={id} />
+              </div>
             </div>
           </div>
         )}
